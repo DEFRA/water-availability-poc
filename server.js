@@ -12,6 +12,7 @@ const POSTCODES_API_URL = 'https://api.postcodes.io/postcodes'
 const CATCHMENT_API_URL = 'https://environment.data.gov.uk/catchment-planning/WaterBody'
 const HYDROLOGY_API_URL = 'https://environment.data.gov.uk/hydrology'
 const RIVER_CATCHMENT_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/WFD_Cycle_2_River_catchment_classification/FeatureServer/5/query'
+const ABSTRACTION_LICENCES_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/Help_for_licence_trading_Abstraction_licence_points/FeatureServer/0/query'
 
 const server = Hapi.server({
   port: 3000,
@@ -282,6 +283,71 @@ server.route({
     } catch (error) {
       console.error('Hydrology API fetch error:', error)
       return h.response({ error: 'Failed to fetch hydrology stations' }).code(500)
+    }
+  }
+})
+
+server.route({
+  method: 'GET',
+  path: '/abstraction-licences',
+  handler: async (request, h) => {
+    const { lat, lng, radius } = request.query
+
+    try {
+      const allFeatures = []
+      let offset = 0
+      const limit = 1000
+      let exceededTransferLimit = true
+
+      while (exceededTransferLimit) {
+        const query = new URLSearchParams({
+          where: '1=1',
+          outFields: '*',
+          f: 'json',
+          outSR: '4326',
+          resultRecordCount: limit,
+          resultOffset: offset
+        })
+
+        if (lat && lng && radius) {
+          const radiusInMeters = parseFloat(radius)
+          query.set('geometry', `${lng},${lat}`)
+          query.set('geometryType', 'esriGeometryPoint')
+          query.set('distance', radiusInMeters)
+          query.set('units', 'esriSRUnit_Meter')
+          query.set('spatialRel', 'esriSpatialRelIntersects')
+        }
+
+        const url = `${ABSTRACTION_LICENCES_URL}?${query.toString()}`
+        const response = await fetch(url)
+        const data = await response.json()
+
+        if (data.features && data.features.length > 0) {
+          allFeatures.push(...data.features)
+          offset += limit
+          exceededTransferLimit = data.exceededTransferLimit || false
+        } else {
+          exceededTransferLimit = false
+        }
+      }
+
+      // Convert to GeoJSON
+      const geojson = {
+        type: 'FeatureCollection',
+        features: allFeatures.map(feature => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [feature.geometry.x, feature.geometry.y]
+          },
+          properties: feature.attributes
+        }))
+      }
+
+      return geojson
+    } catch (error) {
+      console.error('Abstraction licences fetch error:', error)
+      return h.response({ error: 'Failed to fetch abstraction licences' }).code(500)
     }
   }
 })

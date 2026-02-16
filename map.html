@@ -50,6 +50,10 @@
       </label>
       <br>
       <label>
+        <input type="checkbox" id="abstractionToggle"> Abstraction Licences
+      </label>
+      <br>
+      <label>
         <input type="checkbox" id="waterbodyToggle" checked> Waterbody Features
       </label>
       <br>
@@ -88,6 +92,7 @@
       document.getElementById('waterToggle').checked = false;
       document.getElementById('waterbodyToggle').checked = true;
       document.getElementById('monitoringToggle').checked = false;
+      document.getElementById('abstractionToggle').checked = false;
       document.getElementById('bgsToggle').checked = false;
       document.getElementById('boundaryToggle').checked = false;
     }
@@ -229,6 +234,7 @@
     
     // Add monitoring sites layer using GeoJSON
     let monitoringSitesLayer;
+    let abstractionLicencesLayer;
     let waterbodyLayer;
     let operationalCatchmentLayer;
     let catchmentLabels = []; // Track catchment label markers
@@ -259,6 +265,43 @@
           }
         });
       });
+
+    // Add abstraction licences layer
+    fetch('/abstraction-licences')
+      .then(response => response.json())
+      .then(data => {
+        console.log('Abstraction licences loaded:', data.features?.length || 0, 'features');
+        abstractionLicencesLayer = L.geoJSON(data, {
+          pointToLayer: (feature, latlng) => {
+            return L.circleMarker(latlng, {
+              radius: 5,
+              fillColor: '#0066cc',
+              color: '#003366',
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.7,
+              pane: 'markerPane'
+            });
+          },
+          onEachFeature: (feature, layer) => {
+            if (feature.properties) {
+              let popupContent = '<b>Abstraction Licence:</b><br>';
+              for (const [key, value] of Object.entries(feature.properties)) {
+                if (value !== null && value !== '') {
+                  popupContent += `${key}: ${value}<br>`;
+                }
+              }
+              layer.bindPopup(popupContent);
+            }
+          }
+        });
+        
+        // Add to map if checkbox is checked
+        if (document.getElementById('abstractionToggle').checked) {
+          abstractionLicencesLayer.addTo(map);
+        }
+      })
+      .catch(error => console.error('Error loading abstraction licences:', error));
     
     // Color mapping for water availability
     const colorMap = {
@@ -446,6 +489,14 @@
         if (monitoringSitesLayer) map.addLayer(monitoringSitesLayer);
       } else {
         if (monitoringSitesLayer) map.removeLayer(monitoringSitesLayer);
+      }
+    });
+
+    document.getElementById('abstractionToggle').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        if (abstractionLicencesLayer) map.addLayer(abstractionLicencesLayer);
+      } else {
+        if (abstractionLicencesLayer) map.removeLayer(abstractionLicencesLayer);
       }
     });
     

@@ -8,6 +8,7 @@ A web application that displays water availability data and related hydrological
 - **Water Availability Layer**: Interactive WMS tiles showing water availability status with clickable polygons
 - **Operational Catchments**: Display operational catchment boundaries when available, showing both outer perimeter and internal structure
 - **Monitoring Sites**: Water monitoring site locations as clickable markers (with priority rendering above other layers)
+- **Abstraction Licences**: Abstraction licence point locations across England with licence details
 - **Waterbody Features**: Displays catchment areas and river lines within 1km of the postcode with labels
 - **Geological Layer**: BGS Hydrogeology data (optional overlay)
 - **Interactive Popups**: Click on polygons and markers to view detailed information
@@ -42,6 +43,14 @@ A web application that displays water availability data and related hydrological
 - **Content**: Hydrological monitoring stations including river flows, levels, groundwater, rainfall, and water quality
 - **Format**: JSON transformed to GeoJSON
 - **Display**: Orange circle markers with popup data, rendered above other layers
+
+### Abstraction Licences
+- **Source**: Environment Agency ArcGIS REST Service
+- **Service**: `https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/Help_for_licence_trading_Abstraction_licence_points/FeatureServer`
+- **Description**: Water trading map licences January 2025
+- **Content**: Abstraction licence point locations with licence details (purpose, source type, catchment, category)
+- **Format**: ArcGIS JSON transformed to GeoJSON with pagination (1000 record limit per request)
+- **Display**: Blue circle markers with popup data, rendered above other layers
 
 ### Waterbody Features
 - **Source**: Environment Agency Catchment Planning API
@@ -90,6 +99,7 @@ A web application that displays water availability data and related hydrological
 - `GET /nearby-catchments` - WFS spatial query for polygons within radius (proxied with mapUri)
 - `GET /operational-catchments-by-ids` - Get operational catchment info by waterbody IDs
 - `GET /monitoring-sites` - Monitoring sites GeoJSON data
+- `GET /abstraction-licences` - Abstraction licence points GeoJSON data with pagination
 - `GET /waterbody/{id}` - Waterbody features for specific ID
 - `GET /operational-catchment/{id}` - Operational catchment GeoJSON for specific OPCAT ID
 - `GET /water-availability-wms` - Proxy for EA water availability WMS service
