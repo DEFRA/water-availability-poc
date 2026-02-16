@@ -119,10 +119,12 @@
             const waterbodyResponse = await fetch(`/waterbody/${id}`);
             const waterbodyData = await waterbodyResponse.json();
             // Add the waterbody ID to each feature for matching
-            waterbodyData.features.forEach(feature => {
-              feature.properties.ea_wb_id = id;
-            });
-            allFeatures.push(...waterbodyData.features);
+            if (waterbodyData.features && waterbodyData.features.length > 0) {
+              waterbodyData.features.forEach(feature => {
+                feature.properties.ea_wb_id = id;
+              });
+              allFeatures.push(...waterbodyData.features);
+            }
           } catch (error) {
             console.error(`Failed to load waterbody ${id}:`, error);
           }
@@ -228,6 +230,7 @@
               
               // Create thumbnail map
               const thumbnailId = `thumbnail-${index}`;
+              const licencesId = `licences-${index}`;
               
               // Get related feature for this waterbody ID (there will only be one)
               const relatedFeature = waterbodiesByWaterbodyId[f.waterbodyId]?.[0];
@@ -247,9 +250,11 @@
                     </div>
                     <a href="${mapUrl}" style="color: #007cba; text-decoration: none; font-size: 0.9em;">View on Map →</a>
                     <div style="margin-top: 8px;">
-                      <div style="font-size: 0.9em; color: #555; margin-bottom:
-                      3px;">Waterbody:</div>
+                      <div style="font-size: 0.9em; color: #555; margin-bottom: 3px;">Waterbody:</div>
                       ${relatedDisplay}
+                    </div>
+                    <div id="${licencesId}" style="margin-top: 8px;">
+                      <div style="font-size: 0.9em; color: #555;">Loading abstraction licences...</div>
                     </div>
                   </div>
                 </div>
@@ -257,7 +262,7 @@
             })
             .join('');
             
-          // Create thumbnail maps after DOM is updated
+          // Create thumbnail maps and load licences after DOM is updated
           setTimeout(() => {
             featuresWithDistance.forEach((f, index) => {
               const thumbnailId = `thumbnail-${index}`;
@@ -289,6 +294,30 @@
               }).addTo(thumbnailMap);
               
               thumbnailMap.fitBounds(geoJsonLayer.getBounds(), { padding: [5, 5] });
+              
+              // Load abstraction licences for this waterbody
+              const licencesId = `licences-${index}`;
+              fetch(`/abstraction-licences-by-waterbody/${f.waterbodyId}`)
+                .then(response => response.json())
+                .then(licences => {
+                  const licencesDiv = document.getElementById(licencesId);
+                  if (licences.length === 0) {
+                    licencesDiv.innerHTML = '<div style="font-size: 0.9em; color: #999; font-style: italic;">No abstraction licences</div>';
+                  } else {
+                    licencesDiv.innerHTML = `
+                      <div style="font-size: 0.9em; color: #555; margin-bottom: 3px;">Abstraction Licences (${licences.length}):</div>
+                      ${licences.map(lic => `
+                        <div style="margin-left: 20px; color: #666; font-size: 0.85em; padding: 2px 0;">
+                          • ${lic.Licence_Number} - ${lic.Purpose || 'Unknown purpose'} (${lic.Source_Type || 'Unknown source'})
+                        </div>
+                      `).join('')}
+                    `;
+                  }
+                })
+                .catch(error => {
+                  console.error('Error loading licences:', error);
+                  document.getElementById(licencesId).innerHTML = '<div style="font-size: 0.9em; color: #cc0000;">Error loading licences</div>';
+                });
             });
           }, 100);
         }

@@ -266,7 +266,7 @@
         });
       });
 
-    // Add abstraction licences layer
+    // Add abstraction licences layer (load all - spatial queries don't work on this service)
     fetch('/abstraction-licences')
       .then(response => response.json())
       .then(data => {
@@ -295,11 +295,6 @@
             }
           }
         });
-        
-        // Add to map if checkbox is checked
-        if (document.getElementById('abstractionToggle').checked) {
-          abstractionLicencesLayer.addTo(map);
-        }
       })
       .catch(error => console.error('Error loading abstraction licences:', error));
     

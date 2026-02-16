@@ -169,11 +169,23 @@ server.route({
 
     try {
       const response = await fetch(`${CATCHMENT_API_URL}/${id}.geojson`)
+
+      if (!response.ok) {
+        console.error(`Waterbody API returned ${response.status} for ${id}`)
+        return h.response({ error: 'Waterbody not found', features: [] }).code(404)
+      }
+
       const data = await response.json()
+
+      if (!data.features) {
+        console.error(`Waterbody ${id} returned invalid data:`, data)
+        return h.response({ type: 'FeatureCollection', features: [] }).code(200)
+      }
+
       return data
     } catch (error) {
       console.error('Waterbody fetch error:', error)
-      return h.response({ error: 'Failed to fetch waterbody data' }).code(500)
+      return h.response({ type: 'FeatureCollection', features: [] }).code(200)
     }
   }
 })
@@ -186,11 +198,23 @@ server.route({
 
     try {
       const response = await fetch(`https://environment.data.gov.uk/catchment-planning/OperationalCatchment/${id}.geojson`)
+
+      if (!response.ok) {
+        console.error(`Operational catchment API returned ${response.status} for ${id}`)
+        return h.response({ type: 'FeatureCollection', features: [] }).code(200)
+      }
+
       const data = await response.json()
+
+      if (!data.features) {
+        console.error(`Operational catchment ${id} returned invalid data:`, data)
+        return h.response({ type: 'FeatureCollection', features: [] }).code(200)
+      }
+
       return data
     } catch (error) {
       console.error('Operational catchment fetch error:', error)
-      return h.response({ error: 'Failed to fetch operational catchment data' }).code(500)
+      return h.response({ type: 'FeatureCollection', features: [] }).code(200)
     }
   }
 })
@@ -291,8 +315,6 @@ server.route({
   method: 'GET',
   path: '/abstraction-licences',
   handler: async (request, h) => {
-    const { lat, lng, radius } = request.query
-
     try {
       const allFeatures = []
       let offset = 0
@@ -309,18 +331,14 @@ server.route({
           resultOffset: offset
         })
 
-        if (lat && lng && radius) {
-          const radiusInMeters = parseFloat(radius)
-          query.set('geometry', `${lng},${lat}`)
-          query.set('geometryType', 'esriGeometryPoint')
-          query.set('distance', radiusInMeters)
-          query.set('units', 'esriSRUnit_Meter')
-          query.set('spatialRel', 'esriSpatialRelIntersects')
-        }
+        // Note: Spatial queries don't seem to work on this ArcGIS service
+        // Load all and let Leaflet filter by viewport
 
         const url = `${ABSTRACTION_LICENCES_URL}?${query.toString()}`
+        console.log('Fetching abstraction licences:', url)
         const response = await fetch(url)
         const data = await response.json()
+        console.log('Response:', { featureCount: data.features?.length, exceededTransferLimit: data.exceededTransferLimit })
 
         if (data.features && data.features.length > 0) {
           allFeatures.push(...data.features)
@@ -347,6 +365,33 @@ server.route({
       return geojson
     } catch (error) {
       console.error('Abstraction licences fetch error:', error)
+      return h.response({ error: 'Failed to fetch abstraction licences' }).code(500)
+    }
+  }
+})
+
+server.route({
+  method: 'GET',
+  path: '/abstraction-licences-by-waterbody/{id}',
+  handler: async (request, h) => {
+    const waterbodyId = request.params.id
+
+    try {
+      const query = new URLSearchParams({
+        where: `WFD_Waterbody_ID = '${waterbodyId}'`,
+        outFields: '*',
+        f: 'json',
+        outSR: '4326'
+      })
+
+      const url = `${ABSTRACTION_LICENCES_URL}?${query.toString()}`
+      const response = await fetch(url)
+      const data = await response.json()
+
+      const licences = data.features ? data.features.map(f => f.attributes) : []
+      return licences
+    } catch (error) {
+      console.error('Abstraction licences by waterbody fetch error:', error)
       return h.response({ error: 'Failed to fetch abstraction licences' }).code(500)
     }
   }
