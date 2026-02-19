@@ -1,0 +1,138 @@
+{
+  "b0d98d93-45de-40c1-a1cf-cd32484c3542_432120": {
+    "ap_number": 1,
+    "ap_name": "AP1, Upavon West",
+    "hof_value": 31.052087480139136,
+    "hof_number": "not crit",
+    "catchment_area_km2": 80.88557434082031,
+    "cams_area": "Hampshire Avon"
+  },
+  "b0d98d93-45de-40c1-a1cf-cd32484c3542_432110": {
+    "ap_number": 2,
+    "ap_name": "AP2, Upavon East",
+    "hof_value": 59.11623382920627,
+    "hof_number": "not crit",
+    "catchment_area_km2": 85.99989318847656,
+    "cams_area": "Hampshire Avon"
+  },
+  "ea442d7a-f666-450a-a04f-449b7aec9edb": {
+    "ap_number": 4,
+    "ap_name": "AP4, Amesbury - Avon",
+    "hof_value": 211.63103689069598,
+    "hof_number": "not crit",
+    "catchment_area_km2": 325.6533508300781,
+    "cams_area": "Hampshire Avon"
+  },
+  "e9da9527-28c6-4cb1-8b70-6e5460afcae3": {
+    "ap_number": 6,
+    "ap_name": "AP6, Stockton Park - Wylye",
+    "hof_value": 168.68830019542042,
+    "hof_number": "HOF5",
+    "catchment_area_km2": 257.1452941894531,
+    "cams_area": "Hampshire Avon"
+  },
+  "de59cc50-5443-4a4e-a560-352a4e1d9df0": {
+    "ap_number": 7,
+    "ap_name": "AP7, South Newton - Wylye",
+    "hof_value": 201.7575646703287,
+    "hof_number": "not crit",
+    "catchment_area_km2": 451.3525390625,
+    "cams_area": "Hampshire Avon"
+  },
+  "439b85d9-21c4-4ae9-839f-5b31d1625aba": {
+    "ap_number": 8,
+    "ap_name": "AP8, Wilton - Nadder",
+    "hof_value": 167.2440561339631,
+    "hof_number": "not crit",
+    "catchment_area_km2": 215.8795166015625,
+    "cams_area": "Hampshire Avon"
+  },
+  "3df68add-46f9-42e7-8439-290f63e195cd": {
+    "ap_number": 10,
+    "ap_name": "AP10, Nunton Bridge - Ebble",
+    "hof_value": 62.61260788637014,
+    "hof_number": "not crit",
+    "catchment_area_km2": 107.5807571411133,
+    "cams_area": "Hampshire Avon"
+  },
+  "0147a8fb-fb06-4f3e-bdcd-01ed17d6af3f": {
+    "ap_number": 12,
+    "ap_name": "AP12, Knapp Mill - Avon",
+    "hof_value": 1015.720621818177,
+    "hof_number": "HOF4",
+    "catchment_area_km2": 1711.856201171875,
+    "cams_area": "Hampshire Avon"
+  },
+  "74996a5c-4436-4480-ab2d-129515aecebb": {
+    "ap_number": 13,
+    "ap_name": "AP13, Codford - Chitterne",
+    "hof_value": 12.958231674496648,
+    "hof_number": "not crit",
+    "catchment_area_km2": 67.97337341308594,
+    "cams_area": "Hampshire Avon"
+  },
+  "bdf4b017-b900-4dd5-b889-8990d9a2ee36": {
+    "ap_number": 14,
+    "ap_name": "AP14, Norton Bavant - Wylye",
+    "hof_value": 83.70178242374914,
+    "hof_number": "not crit",
+    "catchment_area_km2": 117.0264739990234,
+    "cams_area": "Hampshire Avon"
+  },
+  "29c364fa-5f64-4622-b309-54f6243aaa83": {
+    "ap_number": 15,
+    "ap_name": "AP15, Brixton Deverill - Wylye",
+    "hof_value": 20.73399536259907,
+    "hof_number": "not crit",
+    "catchment_area_km2": 51.02303695678711,
+    "cams_area": "Hampshire Avon"
+  },
+  "ebc1166c-4d4e-4b0a-ae37-f8463436c5de": {
+    "ap_number": 17,
+    "ap_name": "AP17, Moyles Court - Dockens Water",
+    "hof_value": 8.413258737040547,
+    "hof_number": "not crit",
+    "catchment_area_km2": 17.38406372070312,
+    "cams_area": "Hampshire Avon"
+  },
+  "2231adf7-22c8-4290-af00-a97b688a4574": {
+    "ap_number": 1,
+    "ap_name": "AP1, Cowbeech - River Cuckmere",
+    "hof_value": 19.91,
+    "hof_number": "not crit",
+    "catchment_area_km2": 19.11,
+    "cams_area": "Cuckmere & Pevensey Levels"
+  },
+  "57e05efb-28aa-47d1-87cd-d3a6c9c16aac": {
+    "ap_number": 2,
+    "ap_name": "AP2, Lealands - River Cuckmere",
+    "hof_value": 36.05,
+    "hof_number": "not crit",
+    "catchment_area_km2": 40.59,
+    "cams_area": "Cuckmere & Pevensey Levels"
+  },
+  "6cd9e6e4-dd4c-4dcf-85bf-dfbf175d450e": {
+    "ap_number": 3,
+    "ap_name": "AP3, Sherman Bridge - River Cuckmere",
+    "hof_value": 69.11,
+    "hof_number": "HOF6",
+    "catchment_area_km2": 126.01,
+    "cams_area": "Cuckmere & Pevensey Levels"
+  },
+  "29a6adc6-10eb-4e49-a3ce-79c9bd0b0505": {
+    "ap_number": 4,
+    "ap_name": "AP4, Boreham Bridge - Upper Wallers Haven",
+    "hof_value": 4.35,
+    "hof_number": "MRF",
+    "catchment_area_km2": 18.84,
+    "cams_area": "Cuckmere & Pevensey Levels"
+  },
+  "adf6520c-b20e-469d-a461-29961f86f56c": {
+    "ap_number": 5,
+    "ap_name": "AP5, Crowhurst - Combe Haven",
+    "hof_value": 6.1,
+    "hof_number": "HOF3",
+    "catchment_area_km2": 28.09,
+    "cams_area": "Cuckmere & Pevensey Levels"
+  }
+}

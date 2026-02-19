@@ -49,6 +49,10 @@
         <input type="checkbox" id="monitoringToggle"> Water Monitoring Sites
       </label>
       <br>
+      <label style="margin-left: 20px;">
+        <input type="checkbox" id="hofOnlyToggle"> Show only stations with HoF
+      </label>
+      <br>
       <label>
         <input type="checkbox" id="abstractionToggle"> Abstraction Licences
       </label>
@@ -234,6 +238,8 @@
     
     // Add monitoring sites layer using GeoJSON
     let monitoringSitesLayer;
+    let monitoringSitesAllData;
+    let hofStations;
     let abstractionLicencesLayer;
     let waterbodyLayer;
     let operationalCatchmentLayer;
@@ -241,25 +247,56 @@
     let waterbodyFeatures = []; // Store waterbody features globally
     fetch('/monitoring-sites')
       .then(response => response.json())
-      .then(data => {
+      .then(async data => {
+        // Store data globally
+        monitoringSitesAllData = data;
+        
+        // Pre-fetch HoF data for all stations
+        hofStations = new Set();
+        await Promise.all(data.features.map(async feature => {
+          try {
+            const hofResp = await fetch(`/hof/${feature.properties.stationGuid}`);
+            if (hofResp.ok) {
+              hofStations.add(feature.properties.stationGuid);
+            }
+          } catch (e) {
+            // No HoF available
+          }
+        }));
+        
         monitoringSitesLayer = L.geoJSON(data, {
           pointToLayer: (feature, latlng) => {
+            const hasHof = hofStations.has(feature.properties.stationGuid);
+            
             return L.circleMarker(latlng, {
               radius: 4,
               fillColor: '#ff7800',
-              color: '#000',
-              weight: 1,
+              color: hasHof ? '#ff0000' : '#000',
+              weight: hasHof ? 3 : 1,
               opacity: 1,
               fillOpacity: 0.8,
-              pane: 'markerPane'
+              pane: 'markerPane',
+              title: feature.properties.label
             });
           },
           onEachFeature: (feature, layer) => {
             if (feature.properties) {
+              // Add tooltip on hover
+              if (feature.properties.label) {
+                layer.bindTooltip(feature.properties.label);
+              }
+              
               let popupContent = '<b>Monitoring Site:</b><br>';
               for (const [key, value] of Object.entries(feature.properties)) {
                 popupContent += `${key}: ${value}<br>`;
               }
+              
+              // Add flow data button if station has flow measures
+              const props = feature.properties;
+              if (props.stationGuid && props.measures && props.measures.includes('flow')) {
+                popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + props.label + '\')">View Flow Data</button>';
+              }
+              
               layer.bindPopup(popupContent);
             }
           }
@@ -479,12 +516,73 @@
       }
     });
     
+    function updateMonitoringSitesLayer() {
+      const showAll = !document.getElementById('hofOnlyToggle').checked;
+      
+      if (monitoringSitesLayer) {
+        map.removeLayer(monitoringSitesLayer);
+      }
+      
+      if (!monitoringSitesAllData) return;
+      
+      const filteredData = showAll ? monitoringSitesAllData : {
+        type: 'FeatureCollection',
+        features: monitoringSitesAllData.features.filter(f => 
+          hofStations.has(f.properties.stationGuid)
+        )
+      };
+      
+      monitoringSitesLayer = L.geoJSON(filteredData, {
+        pointToLayer: (feature, latlng) => {
+          const hasHof = hofStations.has(feature.properties.stationGuid);
+          
+          return L.circleMarker(latlng, {
+            radius: 4,
+            fillColor: '#ff7800',
+            color: hasHof ? '#ff0000' : '#000',
+            weight: hasHof ? 3 : 1,
+            opacity: 1,
+            fillOpacity: 0.8,
+            pane: 'markerPane',
+            title: feature.properties.label
+          });
+        },
+        onEachFeature: (feature, layer) => {
+          if (feature.properties) {
+            if (feature.properties.label) {
+              layer.bindTooltip(feature.properties.label);
+            }
+            
+            let popupContent = '<b>Monitoring Site:</b><br>';
+            for (const [key, value] of Object.entries(feature.properties)) {
+              popupContent += `${key}: ${value}<br>`;
+            }
+            
+            const props = feature.properties;
+            if (props.stationGuid && props.measures && props.measures.includes('flow')) {
+              popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + props.label + '\')">View Flow Data</button>';
+            }
+            
+            layer.bindPopup(popupContent);
+          }
+        }
+      });
+      
+      if (document.getElementById('monitoringToggle').checked) {
+        map.addLayer(monitoringSitesLayer);
+      }
+    }
+
     document.getElementById('monitoringToggle').addEventListener('change', (e) => {
       if (e.target.checked) {
         if (monitoringSitesLayer) map.addLayer(monitoringSitesLayer);
       } else {
         if (monitoringSitesLayer) map.removeLayer(monitoringSitesLayer);
       }
+    });
+    
+    document.getElementById('hofOnlyToggle').addEventListener('change', () => {
+      updateMonitoringSitesLayer();
     });
 
     document.getElementById('abstractionToggle').addEventListener('change', (e) => {
@@ -587,6 +685,209 @@
         if (operationalCatchmentLayer) map.removeLayer(operationalCatchmentLayer);
       }
     });
+
+    // Flow data chart functionality
+    let flowChartModal = null;
+    let flowChart = null;
+
+    window.showFlowData = async function(stationGuid, stationName) {
+      // Create modal if it doesn't exist
+      if (!flowChartModal) {
+        flowChartModal = document.createElement('div');
+        flowChartModal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.3);z-index:10000;max-width:90%;max-height:90%;overflow:auto;display:none;';
+        flowChartModal.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:10px;"><h3 style="margin:0;">Loading...</h3><button onclick="closeFlowChart()" style="border:none;background:#ccc;padding:5px 10px;cursor:pointer;border-radius:4px;">Close</button></div><canvas id="flowChart" width="800" height="400"></canvas><div id="hofStats" style="margin-top:20px;"></div>';
+        document.body.appendChild(flowChartModal);
+      }
+
+      flowChartModal.style.display = 'block';
+      flowChartModal.querySelector('h3').textContent = 'Loading flow data...';
+
+      try {
+        // Get flow measure ID
+        const stationUrl = `https://environment.data.gov.uk/hydrology/id/stations/${stationGuid}`;
+        console.log('Fetching station:', stationUrl);
+        const stationResp = await fetch(stationUrl);
+        const stationData = await stationResp.json();
+        console.log('Station data:', stationData);
+        
+        if (!stationData.items || stationData.items.length === 0) {
+          throw new Error('Station not found or no data available');
+        }
+        
+        const measures = stationData.items[0].measures;
+        const flowMeasure = measures.find(m => 
+          m.parameter === 'flow' && 
+          m.period === 86400 && 
+          m.valueStatistic && 
+          m.valueStatistic.label === 'mean'
+        );
+        
+        if (!flowMeasure) {
+          throw new Error('No daily mean flow measure found for this station');
+        }
+
+        const measureId = flowMeasure['@id'].split('/').pop();
+        
+        // Calculate date 5 years ago
+        const startDate = new Date();
+        startDate.setFullYear(startDate.getFullYear() - 5);
+        
+        // Fetch flow data using mineq-date parameter
+        const dataUrl = `https://environment.data.gov.uk/hydrology/data/readings.json?measure=${measureId}&mineq-date=${startDate.toISOString().split('T')[0]}&_limit=2000`;
+        const dataResp = await fetch(dataUrl);
+        const flowData = await dataResp.json();
+
+        if (!flowData.items || flowData.items.length === 0) {
+          throw new Error('No flow data available for this station');
+        }
+
+        // Sort by date and prepare chart data
+        const sortedData = flowData.items
+          .map(item => ({
+            date: item.dateTime || item.date,
+            value: item.value
+          }))
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        const dates = sortedData.map(item => item.date);
+        const values = sortedData.map(item => item.value * 86.4); // Convert m³/s to Ml/d
+
+        // Fetch HoF value
+        let hofValue = null;
+        try {
+          const hofResp = await fetch(`/hof/${stationGuid}`);
+          if (hofResp.ok) {
+            const hofData = await hofResp.json();
+            hofValue = hofData.hofValue; // Already in Ml/d
+          }
+        } catch (e) {
+          // HoF not available, continue without it
+        }
+
+        flowChartModal.querySelector('h3').textContent = `Flow Data: ${stationName}`;
+
+        // Load Chart.js if not already loaded
+        if (typeof Chart === 'undefined') {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+          script.onload = () => {
+            const adapter = document.createElement('script');
+            adapter.src = 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js';
+            adapter.onload = () => createChart(dates, values, hofValue, sortedData);
+            document.head.appendChild(adapter);
+          };
+          document.head.appendChild(script);
+        } else {
+          createChart(dates, values, hofValue, sortedData);
+        }
+
+      } catch (error) {
+        flowChartModal.querySelector('h3').textContent = 'Error: ' + error.message;
+        console.error('Flow data error:', error);
+      }
+    };
+
+    function createChart(dates, values, hofValue, sortedData) {
+      const ctx = document.getElementById('flowChart').getContext('2d');
+      
+      if (flowChart) {
+        flowChart.destroy();
+      }
+
+      const datasets = [{
+        label: 'Daily Mean Flow (Ml/d)',
+        data: values,
+        borderColor: '#0066cc',
+        backgroundColor: 'rgba(0, 102, 204, 0.1)',
+        borderWidth: 1,
+        pointRadius: 0
+      }];
+
+      // Add HoF line if available
+      if (hofValue !== null) {
+        datasets.push({
+          label: 'Hands off Flow (HoF)',
+          data: Array(dates.length).fill(hofValue),
+          borderColor: '#ff0000',
+          borderWidth: 2,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          fill: false
+        });
+
+        // Calculate proportion of days below HoF per year
+        const yearStats = {};
+        sortedData.forEach(item => {
+          const year = new Date(item.date).getFullYear();
+          if (!yearStats[year]) {
+            yearStats[year] = { total: 0, belowHof: 0 };
+          }
+          yearStats[year].total++;
+          const flowMld = item.value * 86.4; // Convert m³/s to Ml/d
+          if (flowMld < hofValue) {
+            yearStats[year].belowHof++;
+          }
+        });
+
+        // Display stats table
+        let tableHtml = '<table style="border-collapse:collapse;width:100%;"><tr><th style="border:1px solid #ddd;padding:8px;">Year</th><th style="border:1px solid #ddd;padding:8px;">Days Below HoF (%)</th></tr>';
+        Object.keys(yearStats).sort().forEach(year => {
+          const pct = ((yearStats[year].belowHof / yearStats[year].total) * 100).toFixed(1);
+          tableHtml += `<tr><td style="border:1px solid #ddd;padding:8px;">${year}</td><td style="border:1px solid #ddd;padding:8px;">${pct}%</td></tr>`;
+        });
+        tableHtml += '</table>';
+        document.getElementById('hofStats').innerHTML = tableHtml;
+      } else {
+        document.getElementById('hofStats').innerHTML = '';
+      }
+
+      // Calculate average flow for y-axis scaling
+      const avgFlow = values.reduce((sum, v) => sum + v, 0) / values.length;
+      const yMax = avgFlow * 3;
+
+      flowChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'month'
+              },
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Flow (Ml/d)'
+              },
+              beginAtZero: true,
+              max: yMax
+            }
+          },
+          plugins: {
+            legend: {
+              display: true
+            }
+          }
+        }
+      });
+    }
+
+    window.closeFlowChart = function() {
+      if (flowChartModal) {
+        flowChartModal.style.display = 'none';
+      }
+    };
   </script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 import Hapi from '@hapi/hapi'
 import Inert from '@hapi/inert'
 import H2o2 from '@hapi/h2o2'
+import hofValues from './hof_values.json' assert { type: 'json' }
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
@@ -291,7 +292,7 @@ server.route({
             id: station.notation,
             label: station.label,
             riverName: station.riverName,
-            stationGuid: station.stationGuid,
+            stationGuid: station.notation,
             wiskiID: station.wiskiID,
             RLOIid: station.RLOIid,
             observedProperty: station.observedProperty?.map(prop => prop.label || prop['@id']).join(', '),
@@ -393,6 +394,28 @@ server.route({
     } catch (error) {
       console.error('Abstraction licences by waterbody fetch error:', error)
       return h.response({ error: 'Failed to fetch abstraction licences' }).code(500)
+    }
+  }
+})
+
+server.route({
+  method: 'GET',
+  path: '/hof/{stationGuid}',
+  handler: (request, h) => {
+    const { stationGuid } = request.params
+    const hofData = hofValues[stationGuid]
+    
+    if (hofData === undefined) {
+      return h.response({ error: 'HoF value not found for this station' }).code(404)
+    }
+    
+    return { 
+      stationGuid, 
+      hofValue: hofData.hof_value,
+      apNumber: hofData.ap_number,
+      apName: hofData.ap_name,
+      hofNumber: hofData.hof_number,
+      camsArea: hofData.cams_area
     }
   }
 })
