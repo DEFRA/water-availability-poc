@@ -241,6 +241,7 @@
     let monitoringSitesAllData;
     let hofStations;
     let abstractionLicencesLayer;
+    let abstractionLicencesData = null; // Cache for lazy loading
     let waterbodyLayer;
     let operationalCatchmentLayer;
     let catchmentLabels = []; // Track catchment label markers
@@ -302,37 +303,33 @@
         });
       });
 
-    // Add abstraction licences layer (load all - spatial queries don't work on this service)
-    fetch('/abstraction-licences')
-      .then(response => response.json())
-      .then(data => {
-        console.log('Abstraction licences loaded:', data.features?.length || 0, 'features');
-        abstractionLicencesLayer = L.geoJSON(data, {
-          pointToLayer: (feature, latlng) => {
-            return L.circleMarker(latlng, {
-              radius: 5,
-              fillColor: '#0066cc',
-              color: '#003366',
-              weight: 1,
-              opacity: 1,
-              fillOpacity: 0.7,
-              pane: 'markerPane'
-            });
-          },
-          onEachFeature: (feature, layer) => {
-            if (feature.properties) {
-              let popupContent = '<b>Abstraction Licence:</b><br>';
-              for (const [key, value] of Object.entries(feature.properties)) {
-                if (value !== null && value !== '') {
-                  popupContent += `${key}: ${value}<br>`;
-                }
+    // Abstraction licences - lazy loaded when toggled on
+    function createAbstractionLicencesLayer(data) {
+      return L.geoJSON(data, {
+        pointToLayer: (feature, latlng) => {
+          return L.circleMarker(latlng, {
+            radius: 5,
+            fillColor: '#0066cc',
+            color: '#003366',
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.7,
+            pane: 'markerPane'
+          });
+        },
+        onEachFeature: (feature, layer) => {
+          if (feature.properties) {
+            let popupContent = '<b>Abstraction Licence:</b><br>';
+            for (const [key, value] of Object.entries(feature.properties)) {
+              if (value !== null && value !== '') {
+                popupContent += `${key}: ${value}<br>`;
               }
-              layer.bindPopup(popupContent);
             }
+            layer.bindPopup(popupContent);
           }
-        });
-      })
-      .catch(error => console.error('Error loading abstraction licences:', error));
+        }
+      });
+    }
     
     // Color mapping for water availability
     const colorMap = {
@@ -588,8 +585,22 @@
       updateMonitoringSitesLayer();
     });
 
-    document.getElementById('abstractionToggle').addEventListener('change', (e) => {
+    document.getElementById('abstractionToggle').addEventListener('change', async (e) => {
       if (e.target.checked) {
+        // Lazy load abstraction licences on first toggle
+        if (!abstractionLicencesData) {
+          console.log('Loading abstraction licences...');
+          try {
+            const response = await fetch('/abstraction-licences');
+            abstractionLicencesData = await response.json();
+            console.log('Abstraction licences loaded:', abstractionLicencesData.features?.length || 0, 'features');
+            abstractionLicencesLayer = createAbstractionLicencesLayer(abstractionLicencesData);
+          } catch (error) {
+            console.error('Error loading abstraction licences:', error);
+            e.target.checked = false; // Uncheck on error
+            return;
+          }
+        }
         if (abstractionLicencesLayer) map.addLayer(abstractionLicencesLayer);
       } else {
         if (abstractionLicencesLayer) map.removeLayer(abstractionLicencesLayer);
