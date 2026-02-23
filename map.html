@@ -829,25 +829,52 @@
           fill: false
         });
 
-        // Calculate proportion of days below HoF per year
-        const yearStats = {};
+        // Calculate proportion of days below HoF per year-month
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const yearMonthStats = {};
         sortedData.forEach(item => {
-          const year = new Date(item.date).getFullYear();
-          if (!yearStats[year]) {
-            yearStats[year] = { total: 0, belowHof: 0 };
+          const date = new Date(item.date);
+          const year = date.getFullYear();
+          const month = date.getMonth(); // 0-11
+          const key = `${year}-${month}`;
+          if (!yearMonthStats[key]) {
+            yearMonthStats[key] = { year, month, total: 0, belowHof: 0 };
           }
-          yearStats[year].total++;
+          yearMonthStats[key].total++;
           const flowMld = item.value * 86.4; // Convert m³/s to Ml/d
           if (flowMld < hofValue) {
-            yearStats[year].belowHof++;
+            yearMonthStats[key].belowHof++;
           }
         });
 
-        // Display stats table
-        let tableHtml = '<table style="border-collapse:collapse;width:100%;"><tr><th style="border:1px solid #ddd;padding:8px;">Year</th><th style="border:1px solid #ddd;padding:8px;">Days Below HoF (%)</th></tr>';
-        Object.keys(yearStats).sort().forEach(year => {
-          const pct = ((yearStats[year].belowHof / yearStats[year].total) * 100).toFixed(1);
-          tableHtml += `<tr><td style="border:1px solid #ddd;padding:8px;">${year}</td><td style="border:1px solid #ddd;padding:8px;">${pct}%</td></tr>`;
+        // Group by year
+        const yearGroups = {};
+        Object.keys(yearMonthStats).forEach(key => {
+          const stats = yearMonthStats[key];
+          if (!yearGroups[stats.year]) {
+            yearGroups[stats.year] = [];
+          }
+          yearGroups[stats.year].push(stats);
+        });
+
+        // Display stats table with collapsible years
+        let tableHtml = '<table style="border-collapse:collapse;width:100%;"><tr><th style="border:1px solid #ddd;padding:8px;">Period</th><th style="border:1px solid #ddd;padding:8px;">Days Below HoF (%)</th></tr>';
+        Object.keys(yearGroups).sort().forEach(year => {
+          const months = yearGroups[year];
+          const yearTotal = months.reduce((sum, m) => sum + m.total, 0);
+          const yearBelowHof = months.reduce((sum, m) => sum + m.belowHof, 0);
+          const yearPct = ((yearBelowHof / yearTotal) * 100).toFixed(1);
+          
+          tableHtml += `<tr style="cursor:pointer;background:#f5f5f5;" onclick="document.getElementById('year-${year}').style.display = document.getElementById('year-${year}').style.display === 'none' ? '' : 'none'">
+            <td style="border:1px solid #ddd;padding:8px;font-weight:bold;">▶ ${year}</td>
+            <td style="border:1px solid #ddd;padding:8px;font-weight:bold;">${yearPct}%</td>
+          </tr>`;
+          tableHtml += `<tbody id="year-${year}" style="display:none;">`;
+          months.forEach(stats => {
+            const pct = ((stats.belowHof / stats.total) * 100).toFixed(1);
+            tableHtml += `<tr><td style="border:1px solid #ddd;padding:8px;padding-left:30px;">${monthNames[stats.month]}</td><td style="border:1px solid #ddd;padding:8px;">${pct}%</td></tr>`;
+          });
+          tableHtml += '</tbody>';
         });
         tableHtml += '</table>';
         document.getElementById('hofStats').innerHTML = tableHtml;
