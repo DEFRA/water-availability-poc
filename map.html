@@ -247,24 +247,18 @@
     let waterbodyFeatures = []; // Store waterbody features globally
     fetch('/monitoring-sites')
       .then(response => response.json())
-      .then(async data => {
+      .then(data => {
         // Store data globally
         monitoringSitesAllData = data;
         
-        // Pre-fetch HoF data for all stations
+        // Build HoF stations set from server-provided data
         hofStations = new Set();
-        await Promise.all(data.features.map(async feature => {
-          try {
-            const props = feature.properties;
-            const compositeKey = `${props.camsledger}|${props.ea_wb_id}`;
-            const hofResp = await fetch(`/hof/${encodeURIComponent(props.camsledger)}/${encodeURIComponent(props.ea_wb_id)}`);
-            if (hofResp.ok) {
-              hofStations.add(compositeKey);
-            }
-          } catch (e) {
-            // No HoF available
+        data.features.forEach(feature => {
+          if (feature.properties.hof_value) {
+            const compositeKey = `${feature.properties.camsledger}|${feature.properties.ea_wb_id}`;
+            hofStations.add(compositeKey);
           }
-        }));
+        });
         
         monitoringSitesLayer = L.geoJSON(data, {
           pointToLayer: (feature, latlng) => {
