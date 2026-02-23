@@ -68,6 +68,13 @@
       try {
         // Get polygons within 1km
         const response = await fetch(`/nearby-catchments?lat=${lat}&lng=${lng}&radius=1000`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('nearby-catchments error:', response.status, errorText);
+          throw new Error(`Failed to fetch catchments: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (!data.features || data.features.length === 0) {

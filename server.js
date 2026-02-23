@@ -1,7 +1,13 @@
 import Hapi from '@hapi/hapi'
 import Inert from '@hapi/inert'
 import H2o2 from '@hapi/h2o2'
-import hofValues from './hof_values.json' assert { type: 'json' }
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const hofValues = JSON.parse(readFileSync(join(__dirname, 'hof_values.json'), 'utf8'))
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
@@ -11,7 +17,7 @@ const EA_WMS_URL = 'https://environment.data.gov.uk/spatialdata/water-resource-a
 const EA_WFS_URL = 'https://environment.data.gov.uk/spatialdata/water-resource-availability-and-abstraction-reliability-cycle-2/wfs'
 const POSTCODES_API_URL = 'https://api.postcodes.io/postcodes'
 const CATCHMENT_API_URL = 'https://environment.data.gov.uk/catchment-planning/WaterBody'
-const HYDROLOGY_API_URL = 'https://environment.data.gov.uk/hydrology'
+const CAMS_AP_URL = 'https://environment.data.gov.uk/geoservices/datasets/394cde56-5cf9-42bf-8d20-86c182f9ce68/ogc/features/v1/collections/ea_catchment_abstraction_management_strategy_assessment_points/items'
 const RIVER_CATCHMENT_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/WFD_Cycle_2_River_catchment_classification/FeatureServer/5/query'
 const ABSTRACTION_LICENCES_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/Help_for_licence_trading_Abstraction_licence_points/FeatureServer/0/query'
 
@@ -249,65 +255,38 @@ server.route({
   method: 'GET',
   path: '/monitoring-sites',
   handler: async (request, h) => {
-    const { lat, lng, radius } = request.query
-
     try {
-      let url
-      if (lat && lng && radius) {
-        // Convert radius from meters to kilometers
-        const radiusInKm = parseFloat(radius) / 1000
+      // Fetch CAMS APs
+      const apUrl = `${CAMS_AP_URL}?f=application/geo%2Bjson&limit=2000`
+      console.log('CAMS AP URL:', apUrl)
+      const apResponse = await fetch(apUrl)
+      const apData = await apResponse.json()
 
-        const query = new URLSearchParams({
-          lat,
-          long: lng,
-          dist: radiusInKm,
-          _limit: '1000'
-        })
+      // Enrich APs with station GUIDs from HoF data
+      apData.features.forEach(ap => {
+        const compositeKey = `${ap.properties.camsledger}|${ap.properties.ea_wb_id}`
+        const hofData = hofValues[compositeKey]
 
-        url = `${HYDROLOGY_API_URL}/id/stations.json?${query.toString()}`
-      } else {
-        // Get all stations with limit
-        const query = new URLSearchParams({
-          _limit: '1000'
-        })
-
-        url = `${HYDROLOGY_API_URL}/id/stations.json?${query.toString()}`
-      }
-
-      console.log('Hydrology API URL:', url)
-
-      const response = await fetch(url)
-      const data = await response.json()
-
-      // Transform to GeoJSON format
-      const geojson = {
-        type: 'FeatureCollection',
-        features: data.items.map(station => ({
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: [station.long, station.lat]
-          },
-          properties: {
-            id: station.notation,
-            label: station.label,
-            riverName: station.riverName,
-            stationGuid: station.notation,
-            wiskiID: station.wiskiID,
-            RLOIid: station.RLOIid,
-            observedProperty: station.observedProperty?.map(prop => prop.label || prop['@id']).join(', '),
-            status: station.status?.map(s => s.label).join(', '),
-            measures: station.measures?.map(m => m.parameter).join(', '),
-            dateOpened: station.dateOpened,
-            catchmentArea: station.catchmentArea
+        if (hofData) {
+          if (hofData.station_guid) {
+            ap.properties.stationGuid = hofData.station_guid
+            ap.properties.measures = 'flow'
+            if (hofData.rloi_id) {
+              ap.properties.rloi_id = hofData.rloi_id
+            }
+            if (hofData.distance_m !== undefined) {
+              ap.properties.gauge_distance_m = hofData.distance_m
+            }
           }
-        }))
-      }
+          ap.properties.hof_value = hofData.hof_value
+          ap.properties.hof_number = hofData.hof_number
+        }
+      })
 
-      return geojson
+      return apData
     } catch (error) {
-      console.error('Hydrology API fetch error:', error)
-      return h.response({ error: 'Failed to fetch hydrology stations' }).code(500)
+      console.error('CAMS AP fetch error:', error)
+      return h.response({ error: 'Failed to fetch CAMS assessment points' }).code(500)
     }
   }
 })
@@ -400,22 +379,24 @@ server.route({
 
 server.route({
   method: 'GET',
-  path: '/hof/{stationGuid}',
+  path: '/hof/{camsArea}/{apId*}',
   handler: (request, h) => {
-    const { stationGuid } = request.params
-    const hofData = hofValues[stationGuid]
-    
+    const { camsArea, apId } = request.params
+    const compositeKey = `${camsArea}|${apId}`
+    const hofData = hofValues[compositeKey]
+
     if (hofData === undefined) {
-      return h.response({ error: 'HoF value not found for this station' }).code(404)
+      return h.response({ error: 'HoF value not found for this assessment point' }).code(404)
     }
-    
-    return { 
-      stationGuid, 
+
+    return {
+      compositeKey,
       hofValue: hofData.hof_value,
       apNumber: hofData.ap_number,
       apName: hofData.ap_name,
       hofNumber: hofData.hof_number,
-      camsArea: hofData.cams_area
+      camsArea: hofData.cams_area,
+      stationGuid: hofData.station_guid
     }
   }
 })

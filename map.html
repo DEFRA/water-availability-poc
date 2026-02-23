@@ -46,11 +46,11 @@
       </label>
       <br>
       <label>
-        <input type="checkbox" id="monitoringToggle"> Water Monitoring Sites
+        <input type="checkbox" id="monitoringToggle"> CAMS Assessment Points
       </label>
       <br>
       <label style="margin-left: 20px;">
-        <input type="checkbox" id="hofOnlyToggle"> Show only stations with HoF
+        <input type="checkbox" id="hofOnlyToggle"> Show only APs with HoF
       </label>
       <br>
       <label>
@@ -255,9 +255,11 @@
         hofStations = new Set();
         await Promise.all(data.features.map(async feature => {
           try {
-            const hofResp = await fetch(`/hof/${feature.properties.stationGuid}`);
+            const props = feature.properties;
+            const compositeKey = `${props.camsledger}|${props.ea_wb_id}`;
+            const hofResp = await fetch(`/hof/${encodeURIComponent(props.camsledger)}/${encodeURIComponent(props.ea_wb_id)}`);
             if (hofResp.ok) {
-              hofStations.add(feature.properties.stationGuid);
+              hofStations.add(compositeKey);
             }
           } catch (e) {
             // No HoF available
@@ -266,7 +268,8 @@
         
         monitoringSitesLayer = L.geoJSON(data, {
           pointToLayer: (feature, latlng) => {
-            const hasHof = hofStations.has(feature.properties.stationGuid);
+            const compositeKey = `${feature.properties.camsledger}|${feature.properties.ea_wb_id}`;
+            const hasHof = hofStations.has(compositeKey);
             
             return L.circleMarker(latlng, {
               radius: 4,
@@ -286,7 +289,7 @@
                 layer.bindTooltip(feature.properties.label);
               }
               
-              let popupContent = '<b>Monitoring Site:</b><br>';
+              let popupContent = '<b>Assessment Point:</b><br>';
               for (const [key, value] of Object.entries(feature.properties)) {
                 popupContent += `${key}: ${value}<br>`;
               }
@@ -294,7 +297,9 @@
               // Add flow data button if station has flow measures
               const props = feature.properties;
               if (props.stationGuid && props.measures && props.measures.includes('flow')) {
-                popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + props.label + '\')">View Flow Data</button>';
+                const camsArea = props.camsledger || '';
+                const apId = props.ea_wb_id || '';
+                popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + (props.ap_name || props.label) + '\', \'' + camsArea + '\', \'' + apId + '\')">View Flow Data</button>';
               }
               
               layer.bindPopup(popupContent);
@@ -527,14 +532,16 @@
       
       const filteredData = showAll ? monitoringSitesAllData : {
         type: 'FeatureCollection',
-        features: monitoringSitesAllData.features.filter(f => 
-          hofStations.has(f.properties.stationGuid)
-        )
+        features: monitoringSitesAllData.features.filter(f => {
+          const compositeKey = `${f.properties.camsledger}|${f.properties.ea_wb_id}`;
+          return hofStations.has(compositeKey);
+        })
       };
       
       monitoringSitesLayer = L.geoJSON(filteredData, {
         pointToLayer: (feature, latlng) => {
-          const hasHof = hofStations.has(feature.properties.stationGuid);
+          const compositeKey = `${feature.properties.camsledger}|${feature.properties.ea_wb_id}`;
+          const hasHof = hofStations.has(compositeKey);
           
           return L.circleMarker(latlng, {
             radius: 4,
@@ -553,14 +560,16 @@
               layer.bindTooltip(feature.properties.label);
             }
             
-            let popupContent = '<b>Monitoring Site:</b><br>';
+            let popupContent = '<b>Assessment Point:</b><br>';
             for (const [key, value] of Object.entries(feature.properties)) {
               popupContent += `${key}: ${value}<br>`;
             }
             
             const props = feature.properties;
             if (props.stationGuid && props.measures && props.measures.includes('flow')) {
-              popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + props.label + '\')">View Flow Data</button>';
+              const camsArea = props.camsledger || '';
+              const apId = props.ea_wb_id || '';
+              popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + (props.ap_name || props.label) + '\', \'' + camsArea + '\', \'' + apId + '\')">View Flow Data</button>';
             }
             
             layer.bindPopup(popupContent);
@@ -690,7 +699,7 @@
     let flowChartModal = null;
     let flowChart = null;
 
-    window.showFlowData = async function(stationGuid, stationName) {
+    window.showFlowData = async function(stationGuid, stationName, camsArea, apId) {
       // Create modal if it doesn't exist
       if (!flowChartModal) {
         flowChartModal = document.createElement('div');
@@ -755,7 +764,7 @@
         // Fetch HoF value
         let hofValue = null;
         try {
-          const hofResp = await fetch(`/hof/${stationGuid}`);
+          const hofResp = await fetch(`/hof/${encodeURIComponent(camsArea)}/${encodeURIComponent(apId)}`);
           if (hofResp.ok) {
             const hofData = await hofResp.json();
             hofValue = hofData.hofValue; // Already in Ml/d
