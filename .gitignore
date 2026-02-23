@@ -1,2 +1,13 @@
 node_modules
 *.geojson
+
+# Kiro CLI and GitHub
+.kiro/
+.github/
+
+# Python
+__pycache__/
+*.pyc
+
+# Large binary files (RAM ledgers)
+*.xlsm
