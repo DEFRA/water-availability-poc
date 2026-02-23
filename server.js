@@ -9,6 +9,40 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const hofValues = JSON.parse(readFileSync(join(__dirname, 'hof_values.json'), 'utf8'))
 
+// Load and enrich CAMS Assessment Points at startup
+let enrichedCamsAps = null
+
+async function loadCamsAps () {
+  console.log('Loading CAMS Assessment Points...')
+  const apUrl = `${CAMS_AP_URL}?f=application/geo%2Bjson&limit=2000`
+  const apResponse = await fetch(apUrl)
+  const apData = await apResponse.json()
+
+  // Enrich APs with station GUIDs from HoF data
+  apData.features.forEach(ap => {
+    const compositeKey = `${ap.properties.camsledger}|${ap.properties.ea_wb_id}`
+    const hofData = hofValues[compositeKey]
+
+    if (hofData) {
+      if (hofData.station_guid) {
+        ap.properties.stationGuid = hofData.station_guid
+        ap.properties.measures = 'flow'
+        if (hofData.rloi_id) {
+          ap.properties.rloi_id = hofData.rloi_id
+        }
+        if (hofData.distance_m !== undefined) {
+          ap.properties.gauge_distance_m = hofData.distance_m
+        }
+      }
+      ap.properties.hof_value = hofData.hof_value
+      ap.properties.hof_number = hofData.hof_number
+    }
+  })
+
+  enrichedCamsAps = apData
+  console.log(`Loaded ${apData.features.length} CAMS Assessment Points`)
+}
+
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 // Service URLs
@@ -254,40 +288,11 @@ server.route({
 server.route({
   method: 'GET',
   path: '/monitoring-sites',
-  handler: async (request, h) => {
-    try {
-      // Fetch CAMS APs
-      const apUrl = `${CAMS_AP_URL}?f=application/geo%2Bjson&limit=2000`
-      console.log('CAMS AP URL:', apUrl)
-      const apResponse = await fetch(apUrl)
-      const apData = await apResponse.json()
-
-      // Enrich APs with station GUIDs from HoF data
-      apData.features.forEach(ap => {
-        const compositeKey = `${ap.properties.camsledger}|${ap.properties.ea_wb_id}`
-        const hofData = hofValues[compositeKey]
-
-        if (hofData) {
-          if (hofData.station_guid) {
-            ap.properties.stationGuid = hofData.station_guid
-            ap.properties.measures = 'flow'
-            if (hofData.rloi_id) {
-              ap.properties.rloi_id = hofData.rloi_id
-            }
-            if (hofData.distance_m !== undefined) {
-              ap.properties.gauge_distance_m = hofData.distance_m
-            }
-          }
-          ap.properties.hof_value = hofData.hof_value
-          ap.properties.hof_number = hofData.hof_number
-        }
-      })
-
-      return apData
-    } catch (error) {
-      console.error('CAMS AP fetch error:', error)
-      return h.response({ error: 'Failed to fetch CAMS assessment points' }).code(500)
+  handler: (request, h) => {
+    if (!enrichedCamsAps) {
+      return h.response({ error: 'CAMS Assessment Points not loaded yet' }).code(503)
     }
+    return enrichedCamsAps
   }
 })
 
@@ -400,6 +405,9 @@ server.route({
     }
   }
 })
+
+// Load CAMS APs before starting server
+await loadCamsAps()
 
 await server.start()
 console.log('Server running on %s', server.info.uri)
