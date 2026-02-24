@@ -38,11 +38,14 @@ A web application that displays water availability data and related hydrological
 - **Format**: WMS tiles
 
 ### Monitoring Sites
-- **Source**: Environment Agency Hydrology API
+- **Source**: Environment Agency Hydrology API and CAMS Assessment Points
 - **Service**: `https://environment.data.gov.uk/hydrology/id/stations`
+- **CAMS APs**: `https://environment.data.gov.uk/geoservices/datasets/.../ea_catchment_abstraction_management_strategy_assessment_points`
 - **Content**: Hydrological monitoring stations including river flows, levels, groundwater, rainfall, and water quality
+- **Enrichment**: APs enriched with waterbody IDs from CAMSAPs_NBB.xlsx spreadsheet mapping
 - **Format**: JSON transformed to GeoJSON
 - **Display**: Orange circle markers with popup data, rendered above other layers
+- **Note**: Waterbody mapping uses EA_WB_ID (AP identifier) as unique key. CAMS ledger names are inconsistent between API and spreadsheet sources, so only EA_WB_ID is used for reliable mapping.
 
 ### Abstraction Licences
 - **Source**: Environment Agency ArcGIS REST Service

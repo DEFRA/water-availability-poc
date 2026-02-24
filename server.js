@@ -72,9 +72,8 @@ async function loadCamsAps () {
       ap.properties.hof_number = hofData.hof_number
     }
 
-    // Add waterbody ID from mapping
-    const waterbodyKey = `${ap.properties.ea_wb_id}|${ap.properties.camsledger}`
-    const waterbodyId = apWaterbodyMapping[waterbodyKey]
+    // Add waterbody ID from mapping (using EA_WB_ID only)
+    const waterbodyId = apWaterbodyMapping[ap.properties.ea_wb_id]
     if (waterbodyId) {
       ap.properties.waterbody_id = waterbodyId
     }
