@@ -103,7 +103,6 @@
         // Use WA polygons as catchments, fetch only RiverLine features from waterbody API
         const allFeatures = [];
         const waterAvailabilityData = {};
-        const operationalCatchmentData = {};
         
         // Add WA polygons as catchment features
         data.features.forEach(feature => {
@@ -123,29 +122,11 @@
           }
         });
         
-        // Fetch operational catchment data for all waterbody IDs
+        // Fetch waterbody names
         if (waterbodyIds.length > 0) {
           try {
             const step2Start = performance.now();
-            
-            // Fetch waterbody names and operational catchment data in parallel
-            const [opcatResponse, namesResponse] = await Promise.all([
-              fetch(`/operational-catchments-by-ids?ids=${waterbodyIds.join(',')}`),
-              fetch(`/waterbody-names?ids=${waterbodyIds.join(',')}`)
-            ]);
-            
-            console.log(`[CLIENT TIMING] operational-catchments fetch: ${(performance.now() - step2Start).toFixed(0)}ms`);
-            
-            let opcatData;
-            try {
-              opcatData = await opcatResponse.json();
-            } catch (jsonError) {
-              console.error('Failed to parse operational-catchments JSON:', jsonError);
-              const text = await opcatResponse.text();
-              console.error('Response text:', text.substring(0, 500));
-              throw jsonError;
-            }
-            
+            const namesResponse = await fetch(`/waterbody-names?ids=${waterbodyIds.join(',')}`);
             const waterbodyNames = await namesResponse.json();
             
             // Add names to catchment features
@@ -156,18 +137,9 @@
               }
             });
             
-            console.log(`[CLIENT TIMING] operational-catchments total: ${(performance.now() - step2Start).toFixed(0)}ms`);
-            opcatData.features.forEach(feature => {
-              const id = feature.attributes.WB_ID;
-              if (id) {
-                operationalCatchmentData[id] = {
-                  opcatId: feature.attributes.OPCAT_ID,
-                  opcatName: feature.attributes.OPCAT_NAME
-                };
-              }
-            });
+            console.log(`[CLIENT TIMING] waterbody-names fetch: ${(performance.now() - step2Start).toFixed(0)}ms`);
           } catch (error) {
-            console.error('Failed to load operational catchment data:', error);
+            console.error('Failed to load waterbody names:', error);
           }
         }
         
@@ -252,11 +224,10 @@
               distance = turf.distance(postcodePoint, centroid, {units: 'meters'});
             }
             const availability = waterAvailabilityData[waterbodyId] || 'unknown';
-            const opcatInfo = operationalCatchmentData[waterbodyId];
             const bounds = turf.bbox(f.geometry);
             const center = turf.centroid(f.geometry).geometry.coordinates;
             
-            catchments.push({ name, distance, availability, waterbodyId, opcatInfo, bounds, center, geometry: f.geometry });
+            catchments.push({ name, distance, availability, waterbodyId, bounds, center, geometry: f.geometry });
           } else {
             // Group other waterbodies by waterbody ID
             if (!waterbodiesByWaterbodyId[waterbodyId]) {
@@ -287,7 +258,7 @@
                 `${Math.round(f.distance)}m` : 
                 `${(f.distance/1000).toFixed(1)}km`;
               
-              const mapUrl = `/map?lat=${lat}&lng=${lng}&postcode=${postcode}&catchment=${encodeURIComponent(f.name)}&layers=waterbody${f.opcatInfo ? `&opcatId=${f.opcatInfo.opcatId}` : ''}`;
+              const mapUrl = `/map?lat=${lat}&lng=${lng}&postcode=${postcode}&catchment=${encodeURIComponent(f.name)}&layers=waterbody`;
               const status = statusMap[f.availability.toLowerCase()] || statusMap['grey'];
               
               // Create thumbnail map
@@ -304,7 +275,7 @@
                 <div class="feature-item" style="display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px;">
                   <div id="${thumbnailId}" style="width: 120px; height: 80px; border: 1px solid #ccc; flex-shrink: 0;"></div>
                   <div style="flex-grow: 1;">
-                    <span class="feature-name" style="font-size: 1.1em;">${f.name}${f.opcatInfo ? ` (${f.opcatInfo.opcatName})` : ''}</span>
+                    <span class="feature-name" style="font-size: 1.1em;">${f.name}</span>
                     <span class="feature-distance">${distanceText}</span>
                     <br>
                     <div style="margin: 5px 0;">

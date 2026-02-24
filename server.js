@@ -113,7 +113,6 @@ const EA_WMS_URL = 'https://environment.data.gov.uk/spatialdata/water-resource-a
 const EA_WFS_URL = 'https://environment.data.gov.uk/spatialdata/water-resource-availability-and-abstraction-reliability-cycle-2/wfs'
 const POSTCODES_API_URL = 'https://api.postcodes.io/postcodes'
 const CAMS_AP_URL = 'https://environment.data.gov.uk/geoservices/datasets/394cde56-5cf9-42bf-8d20-86c182f9ce68/ogc/features/v1/collections/ea_catchment_abstraction_management_strategy_assessment_points/items'
-const RIVER_CATCHMENT_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/WFD_Cycle_2_River_catchment_classification/FeatureServer/5/query'
 const ABSTRACTION_LICENCES_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/Help_for_licence_trading_Abstraction_licence_points/FeatureServer/0/query'
 
 const server = Hapi.server({
@@ -354,62 +353,6 @@ server.route({
     } catch (error) {
       console.error('[ERROR] waterbody-names:', error.message)
       return {}
-    }
-  }
-})
-
-server.route({
-  method: 'GET',
-  path: '/operational-catchment/{id}',
-  handler: async (request, h) => {
-    const { id } = request.params
-
-    try {
-      const response = await fetch(`https://environment.data.gov.uk/catchment-planning/OperationalCatchment/${id}.geojson`)
-
-      if (!response.ok) {
-        console.error(`Operational catchment API returned ${response.status} for ${id}`)
-        return h.response({ type: 'FeatureCollection', features: [] }).code(200)
-      }
-
-      const data = await response.json()
-
-      if (!data.features) {
-        console.error(`Operational catchment ${id} returned invalid data:`, data)
-        return h.response({ type: 'FeatureCollection', features: [] }).code(200)
-      }
-
-      return data
-    } catch (error) {
-      console.error('Operational catchment fetch error:', error)
-      return h.response({ type: 'FeatureCollection', features: [] }).code(200)
-    }
-  }
-})
-
-server.route({
-  method: 'GET',
-  path: '/operational-catchments-by-ids',
-  handler: {
-    proxy: {
-      mapUri: (request) => {
-        const start = Date.now()
-        const { ids } = request.query
-
-        // Build WHERE clause for specific waterbody IDs
-        const idList = ids.split(',').map(id => `'${id.trim()}'`).join(',')
-        const whereClause = `WB_ID IN (${idList})`
-
-        const query = new URLSearchParams({
-          where: whereClause,
-          outFields: 'WB_ID,WB_NAME,OPCAT_ID,OPCAT_NAME',
-          f: 'json'
-        })
-
-        console.log(`[TIMING] operational-catchments-by-ids mapUri: ${Date.now() - start}ms`)
-        return { uri: `${RIVER_CATCHMENT_URL}?${query.toString()}` }
-      },
-      passThrough: true
     }
   }
 })
