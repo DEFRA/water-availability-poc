@@ -65,17 +65,28 @@
     document.getElementById('mapLink').href = `/map?lat=${lat}&lng=${lng}&postcode=${postcode}`;
     
     async function loadWaterbodyFeatures() {
+      const overallStart = performance.now();
       try {
         // Get polygons within 1km
+        const step1Start = performance.now();
         const response = await fetch(`/nearby-catchments?lat=${lat}&lng=${lng}&radius=1000`);
+        console.log(`[CLIENT TIMING] nearby-catchments fetch: ${(performance.now() - step1Start).toFixed(0)}ms`);
         
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('nearby-catchments error:', response.status, errorText);
+          console.error('nearby-catchments error:', response.status, response.statusText);
           throw new Error(`Failed to fetch catchments: ${response.status}`);
         }
         
-        const data = await response.json();
+        let data;
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          console.error('Failed to parse nearby-catchments JSON:', jsonError);
+          const text = await response.text();
+          console.error('Response text:', text.substring(0, 500));
+          throw jsonError;
+        }
+        console.log(`[CLIENT TIMING] nearby-catchments total: ${(performance.now() - step1Start).toFixed(0)}ms`);
         
         if (!data.features || data.features.length === 0) {
           document.getElementById('loading').textContent = 'No water availability polygons found within 1km.';
@@ -105,8 +116,20 @@
         // Fetch operational catchment data for all waterbody IDs
         if (waterbodyIds.length > 0) {
           try {
+            const step2Start = performance.now();
             const opcatResponse = await fetch(`/operational-catchments-by-ids?ids=${waterbodyIds.join(',')}`);
-            const opcatData = await opcatResponse.json();
+            console.log(`[CLIENT TIMING] operational-catchments fetch: ${(performance.now() - step2Start).toFixed(0)}ms`);
+            
+            let opcatData;
+            try {
+              opcatData = await opcatResponse.json();
+            } catch (jsonError) {
+              console.error('Failed to parse operational-catchments JSON:', jsonError);
+              const text = await opcatResponse.text();
+              console.error('Response text:', text.substring(0, 500));
+              throw jsonError;
+            }
+            console.log(`[CLIENT TIMING] operational-catchments total: ${(performance.now() - step2Start).toFixed(0)}ms`);
             opcatData.features.forEach(feature => {
               const id = feature.attributes.WB_ID;
               if (id) {
@@ -121,11 +144,14 @@
           }
         }
         
+        // Fetch waterbodies sequentially - EA API returns 503 errors when requests are made in parallel
+        const wbStart = performance.now();
         for (const id of waterbodyIds) {
           try {
             const waterbodyResponse = await fetch(`/waterbody/${id}`);
             const waterbodyData = await waterbodyResponse.json();
-            // Add the waterbody ID to each feature for matching
+            console.log(`[CLIENT TIMING] waterbody/${id}: ${(performance.now() - wbStart).toFixed(0)}ms (cumulative)`);
+            
             if (waterbodyData.features && waterbodyData.features.length > 0) {
               waterbodyData.features.forEach(feature => {
                 feature.properties.ea_wb_id = id;
@@ -136,6 +162,7 @@
             console.error(`Failed to load waterbody ${id}:`, error);
           }
         }
+        console.log(`[CLIENT TIMING] All waterbodies loaded: ${(performance.now() - wbStart).toFixed(0)}ms`);
         
         // Calculate distances and sort - separate catchments and other waterbodies
         const postcodePoint = turf.point([parseFloat(lng), parseFloat(lat)]);
@@ -213,6 +240,7 @@
         });
         
         const featuresWithDistance = catchments.sort((a, b) => a.distance - b.distance);
+        console.log(`[CLIENT TIMING] Distance calculation and sorting: ${(performance.now() - overallStart).toFixed(0)}ms (cumulative)`);
         
         // Display results
         const featureList = document.getElementById('featureList');
@@ -304,9 +332,11 @@
               
               // Load abstraction licences for this waterbody
               const licencesId = `licences-${index}`;
+              const licStart = performance.now();
               fetch(`/abstraction-licences-by-waterbody/${f.waterbodyId}`)
                 .then(response => response.json())
                 .then(licences => {
+                  console.log(`[CLIENT TIMING] abstraction-licences-by-waterbody/${f.waterbodyId}: ${(performance.now() - licStart).toFixed(0)}ms`);
                   const licencesDiv = document.getElementById(licencesId);
                   if (licences.length === 0) {
                     licencesDiv.innerHTML = '<div style="font-size: 0.9em; color: #999; font-style: italic;">No abstraction licences</div>';
@@ -331,6 +361,7 @@
         
         document.getElementById('loading').style.display = 'none';
         document.getElementById('results').style.display = 'block';
+        console.log(`[CLIENT TIMING] TOTAL page load time: ${(performance.now() - overallStart).toFixed(0)}ms`);
         
       } catch (error) {
         console.error('Error loading catchment areas:', error);

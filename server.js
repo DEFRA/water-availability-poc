@@ -14,12 +14,30 @@ let enrichedCamsAps = null
 
 async function loadCamsAps () {
   console.log('Loading CAMS Assessment Points...')
-  const apUrl = `${CAMS_AP_URL}?f=application/geo%2Bjson&limit=2000`
-  const apResponse = await fetch(apUrl)
-  const apData = await apResponse.json()
+  const allFeatures = []
+  const limit = 100
+  let startIndex = 0
+
+  while (true) {
+    const apUrl = `${CAMS_AP_URL}?f=application/geo%2Bjson&limit=${limit}&startIndex=${startIndex}`
+    const apResponse = await fetch(apUrl)
+
+    if (!apResponse.ok) {
+      const text = await apResponse.text()
+      console.error('Response body:', text.substring(0, 500))
+      throw new Error(`CAMS AP API returned ${apResponse.status}`)
+    }
+
+    const apData = await apResponse.json()
+    allFeatures.push(...apData.features)
+    console.log(`Loaded ${allFeatures.length} of ${apData.numberMatched} CAMS Assessment Points`)
+
+    if (allFeatures.length >= apData.numberMatched) break
+    startIndex += limit
+  }
 
   // Enrich APs with station GUIDs from HoF data
-  apData.features.forEach(ap => {
+  allFeatures.forEach(ap => {
     const compositeKey = `${ap.properties.camsledger}|${ap.properties.ea_wb_id}`
     const hofData = hofValues[compositeKey]
 
@@ -39,8 +57,8 @@ async function loadCamsAps () {
     }
   })
 
-  enrichedCamsAps = apData
-  console.log(`Loaded ${apData.features.length} CAMS Assessment Points`)
+  enrichedCamsAps = { type: 'FeatureCollection', features: allFeatures }
+  console.log(`Loaded ${allFeatures.length} CAMS Assessment Points`)
 }
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
@@ -176,6 +194,7 @@ server.route({
   handler: {
     proxy: {
       mapUri: (request) => {
+        const start = Date.now()
         const { lat, lng, radius = 1000 } = request.query
 
         // Calculate precise bbox for radius (1 degree ≈ 111km at equator)
@@ -195,6 +214,7 @@ server.route({
           BBOX: `${minLng},${minLat},${maxLng},${maxLat},EPSG:4326`
         })
 
+        console.log(`[TIMING] nearby-catchments: ${Date.now() - start}ms`)
         return { uri: `${EA_WFS_URL}?${query.toString()}` }
       },
       passThrough: true
@@ -206,26 +226,33 @@ server.route({
   method: 'GET',
   path: '/waterbody/{id}',
   handler: async (request, h) => {
+    const start = Date.now()
     const { id } = request.params
+    console.log(`[TIMING] waterbody/${id} handler started: 0ms`)
 
     try {
+      console.log(`[TIMING] waterbody/${id} about to fetch: ${Date.now() - start}ms`)
       const response = await fetch(`${CATCHMENT_API_URL}/${id}.geojson`)
+      console.log(`[TIMING] waterbody/${id} fetch complete: ${Date.now() - start}ms, status: ${response.status}`)
 
       if (!response.ok) {
         console.error(`Waterbody API returned ${response.status} for ${id}`)
         return h.response({ error: 'Waterbody not found', features: [] }).code(404)
       }
 
+      console.log(`[TIMING] waterbody/${id} about to parse JSON: ${Date.now() - start}ms`)
       const data = await response.json()
+      console.log(`[TIMING] waterbody/${id} JSON parsed: ${Date.now() - start}ms, features: ${data.features?.length}`)
 
       if (!data.features) {
         console.error(`Waterbody ${id} returned invalid data:`, data)
         return h.response({ type: 'FeatureCollection', features: [] }).code(200)
       }
 
+      console.log(`[TIMING] waterbody/${id} returning response: ${Date.now() - start}ms`)
       return data
     } catch (error) {
-      console.error('Waterbody fetch error:', error)
+      console.error(`[TIMING] waterbody/${id} error at ${Date.now() - start}ms:`, error.message)
       return h.response({ type: 'FeatureCollection', features: [] }).code(200)
     }
   }
@@ -266,6 +293,7 @@ server.route({
   handler: {
     proxy: {
       mapUri: (request) => {
+        const start = Date.now()
         const { ids } = request.query
 
         // Build WHERE clause for specific waterbody IDs
@@ -278,6 +306,7 @@ server.route({
           f: 'json'
         })
 
+        console.log(`[TIMING] operational-catchments-by-ids mapUri: ${Date.now() - start}ms`)
         return { uri: `${RIVER_CATCHMENT_URL}?${query.toString()}` }
       },
       passThrough: true
@@ -359,6 +388,7 @@ server.route({
   method: 'GET',
   path: '/abstraction-licences-by-waterbody/{id}',
   handler: async (request, h) => {
+    const start = Date.now()
     const waterbodyId = request.params.id
 
     try {
@@ -372,6 +402,7 @@ server.route({
       const url = `${ABSTRACTION_LICENCES_URL}?${query.toString()}`
       const response = await fetch(url)
       const data = await response.json()
+      console.log(`[TIMING] abstraction-licences-by-waterbody/${waterbodyId}: ${Date.now() - start}ms`)
 
       const licences = data.features ? data.features.map(f => f.attributes) : []
       return licences

@@ -133,3 +133,47 @@ The application uses server-side proxy routes to avoid Cross-Origin Resource Sha
 - Server returns data to frontend
 
 **Benefits**: Avoids CORS issues, enables parameter transformation, provides centralized error handling, and hides external service URLs from the frontend.
+
+---
+
+## Performance Characteristics
+
+The application includes timing instrumentation to monitor performance bottlenecks. Load times are highly variable due to external service reliability.
+
+### Typical Performance (Results Page Load)
+
+**Fast scenario (2-3 seconds total):**
+- nearby-catchments (WFS): 500ms
+- operational-catchments: 200ms
+- waterbody fetches (3x sequential): 600ms each = 1.8s
+- abstraction licences (parallel, after render): 300ms each
+
+**Slow scenario (60+ seconds total):**
+- nearby-catchments (WFS): 2-5.5s
+- operational-catchments: 200-450ms
+- waterbody fetches: 600ms-56s each (highly variable)
+- abstraction licences: 300-400ms each
+
+### Performance Bottlenecks
+
+**Environment Agency Catchment Planning API** (`/catchment-planning/WaterBody/`) is the primary bottleneck:
+- Response times range from 600ms to 56+ seconds for identical requests
+- Sometimes returns 503 errors after 60s timeout
+- Cannot handle parallel requests (returns 503 when concurrent)
+- Waterbody fetches must be sequential to avoid failures
+
+**Environment Agency WFS Service** (`/spatialdata/.../wfs`) has moderate variability:
+- Response times range from 500ms to 5.5s
+- Generally more reliable than Catchment Planning API
+
+**ArcGIS Services** (operational catchments, abstraction licences) are consistently fast:
+- Response times: 200-450ms
+- Reliable performance
+
+### Monitoring
+
+Timing logs are available in:
+- **Browser console**: `[CLIENT TIMING]` messages show end-to-end request times
+- **Server console**: `[TIMING]` messages show server-side processing and external API response times
+
+These logs help identify when external EA services are experiencing performance issues.
