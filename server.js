@@ -8,6 +8,7 @@ import { dirname, join } from 'path'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const hofValues = JSON.parse(readFileSync(join(__dirname, 'hof_values.json'), 'utf8'))
+const apWaterbodyMapping = JSON.parse(readFileSync(join(__dirname, 'ap_waterbody_mapping.json'), 'utf8'))
 
 // Load and enrich CAMS Assessment Points at startup
 let enrichedCamsAps = null
@@ -36,7 +37,7 @@ async function loadCamsAps () {
     startIndex += limit
   }
 
-  // Enrich APs with station GUIDs from HoF data
+  // Enrich APs with station GUIDs from HoF data and waterbody IDs
   allFeatures.forEach(ap => {
     const compositeKey = `${ap.properties.camsledger}|${ap.properties.ea_wb_id}`
     const hofData = hofValues[compositeKey]
@@ -54,6 +55,13 @@ async function loadCamsAps () {
       }
       ap.properties.hof_value = hofData.hof_value
       ap.properties.hof_number = hofData.hof_number
+    }
+
+    // Add waterbody ID from mapping
+    const waterbodyKey = `${ap.properties.ea_wb_id}|${ap.properties.camsledger}`
+    const waterbodyId = apWaterbodyMapping[waterbodyKey]
+    if (waterbodyId) {
+      ap.properties.waterbody_id = waterbodyId
     }
   })
 

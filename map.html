@@ -246,6 +246,63 @@
     let operationalCatchmentLayer;
     let catchmentLabels = []; // Track catchment label markers
     let waterbodyFeatures = []; // Store waterbody features globally
+    
+    // Common function to create monitoring sites popup with waterbody name loading
+    function createMonitoringSitePopup(feature, layer) {
+      if (!feature.properties) return;
+      
+      // Add tooltip on hover
+      if (feature.properties.label) {
+        layer.bindTooltip(feature.properties.label);
+      }
+      
+      let popupContent = '<b>Assessment Point:</b><br>';
+      for (const [key, value] of Object.entries(feature.properties)) {
+        if (key !== 'waterbody_id') {
+          popupContent += `${key}: ${value}<br>`;
+        }
+      }
+      
+      // Add waterbody ID and name
+      if (feature.properties.waterbody_id) {
+        const safeId = feature.properties.waterbody_id.replace(/[^a-zA-Z0-9]/g, '_');
+        popupContent += `waterbody_id: ${feature.properties.waterbody_id}<br>`;
+        popupContent += `<span id="wb-name-${safeId}">waterbody_name: <i>Loading...</i></span><br>`;
+      }
+      
+      // Add flow data button if station has flow measures
+      const props = feature.properties;
+      if (props.stationGuid && props.measures && props.measures.includes('flow')) {
+        const camsArea = props.camsledger || '';
+        const apId = props.ea_wb_id || '';
+        popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + (props.ap_name || props.label) + '\', \'' + camsArea + '\', \'' + apId + '\')">View Flow Data</button>';
+      }
+      
+      layer.bindPopup(popupContent);
+      
+      // Lazy load waterbody name
+      if (feature.properties.waterbody_id) {
+        layer.on('popupopen', async () => {
+          const wbId = feature.properties.waterbody_id;
+          const safeId = wbId.replace(/[^a-zA-Z0-9]/g, '_');
+          const nameSpan = document.getElementById(`wb-name-${safeId}`);
+          if (nameSpan && nameSpan.textContent.includes('Loading')) {
+            try {
+              const response = await fetch(`/operational-catchments-by-ids?ids=${wbId}`);
+              const data = await response.json();
+              if (data.features && data.features.length > 0) {
+                nameSpan.textContent = `waterbody_name: ${data.features[0].attributes.WB_NAME}`;
+              } else {
+                nameSpan.textContent = 'waterbody_name: Not found';
+              }
+            } catch (error) {
+              nameSpan.textContent = 'waterbody_name: Error';
+            }
+          }
+        });
+      }
+    }
+    
     fetch('/monitoring-sites')
       .then(response => response.json())
       .then(data => {
@@ -277,29 +334,7 @@
               title: feature.properties.label
             });
           },
-          onEachFeature: (feature, layer) => {
-            if (feature.properties) {
-              // Add tooltip on hover
-              if (feature.properties.label) {
-                layer.bindTooltip(feature.properties.label);
-              }
-              
-              let popupContent = '<b>Assessment Point:</b><br>';
-              for (const [key, value] of Object.entries(feature.properties)) {
-                popupContent += `${key}: ${value}<br>`;
-              }
-              
-              // Add flow data button if station has flow measures
-              const props = feature.properties;
-              if (props.stationGuid && props.measures && props.measures.includes('flow')) {
-                const camsArea = props.camsledger || '';
-                const apId = props.ea_wb_id || '';
-                popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + (props.ap_name || props.label) + '\', \'' + camsArea + '\', \'' + apId + '\')">View Flow Data</button>';
-              }
-              
-              layer.bindPopup(popupContent);
-            }
-          }
+          onEachFeature: createMonitoringSitePopup
         });
       });
 
@@ -545,27 +580,7 @@
             title: feature.properties.label
           });
         },
-        onEachFeature: (feature, layer) => {
-          if (feature.properties) {
-            if (feature.properties.label) {
-              layer.bindTooltip(feature.properties.label);
-            }
-            
-            let popupContent = '<b>Assessment Point:</b><br>';
-            for (const [key, value] of Object.entries(feature.properties)) {
-              popupContent += `${key}: ${value}<br>`;
-            }
-            
-            const props = feature.properties;
-            if (props.stationGuid && props.measures && props.measures.includes('flow')) {
-              const camsArea = props.camsledger || '';
-              const apId = props.ea_wb_id || '';
-              popupContent += '<br><button onclick="showFlowData(\'' + props.stationGuid + '\', \'' + (props.ap_name || props.label) + '\', \'' + camsArea + '\', \'' + apId + '\')">View Flow Data</button>';
-            }
-            
-            layer.bindPopup(popupContent);
-          }
-        }
+        onEachFeature: createMonitoringSitePopup
       });
       
       if (document.getElementById('monitoringToggle').checked) {
