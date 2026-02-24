@@ -100,16 +100,26 @@
             .filter(id => id)
         )];
         
-        // Fetch all waterbody features and water availability data
+        // Use WA polygons as catchments, fetch only RiverLine features from waterbody API
         const allFeatures = [];
         const waterAvailabilityData = {};
         const operationalCatchmentData = {};
         
-        // First, store water availability data by waterbody ID
+        // Add WA polygons as catchment features
         data.features.forEach(feature => {
           const id = feature.properties.ea_wb_id;
           if (id) {
             waterAvailabilityData[id] = feature.properties.camscdsq95;
+            // Add WA polygon as a Catchment feature (name will be added from operational catchment data)
+            allFeatures.push({
+              type: 'Feature',
+              geometry: feature.geometry,
+              properties: {
+                ...feature.properties,
+                'geometry-type': 'http://environment.data.gov.uk/catchment-planning/def/geometry/Catchment',
+                ea_wb_id: id
+              }
+            });
           }
         });
         
@@ -117,7 +127,13 @@
         if (waterbodyIds.length > 0) {
           try {
             const step2Start = performance.now();
-            const opcatResponse = await fetch(`/operational-catchments-by-ids?ids=${waterbodyIds.join(',')}`);
+            
+            // Fetch waterbody names and operational catchment data in parallel
+            const [opcatResponse, namesResponse] = await Promise.all([
+              fetch(`/operational-catchments-by-ids?ids=${waterbodyIds.join(',')}`),
+              fetch(`/waterbody-names?ids=${waterbodyIds.join(',')}`)
+            ]);
+            
             console.log(`[CLIENT TIMING] operational-catchments fetch: ${(performance.now() - step2Start).toFixed(0)}ms`);
             
             let opcatData;
@@ -129,6 +145,17 @@
               console.error('Response text:', text.substring(0, 500));
               throw jsonError;
             }
+            
+            const waterbodyNames = await namesResponse.json();
+            
+            // Add names to catchment features
+            allFeatures.forEach(f => {
+              const id = f.properties.ea_wb_id;
+              if (id && waterbodyNames[id] && f.properties['geometry-type']?.endsWith('Catchment')) {
+                f.properties.name = waterbodyNames[id];
+              }
+            });
+            
             console.log(`[CLIENT TIMING] operational-catchments total: ${(performance.now() - step2Start).toFixed(0)}ms`);
             opcatData.features.forEach(feature => {
               const id = feature.attributes.WB_ID;
@@ -144,7 +171,7 @@
           }
         }
         
-        // Fetch waterbodies sequentially - EA API returns 503 errors when requests are made in parallel
+        // Fetch RiverLine features only (Catchments already added from WA polygons)
         const wbStart = performance.now();
         for (const id of waterbodyIds) {
           try {

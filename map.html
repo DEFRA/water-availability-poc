@@ -131,8 +131,24 @@
             )];
             
             console.log('[WB TIMING] Fetching', waterbodyIds.length, 'waterbodies');
-            // Fetch waterbody features for all IDs
-            waterbodyFeatures = []; // Reset global array
+            
+            // Fetch waterbody names
+            const namesResponse = await fetch(`/waterbody-names?ids=${waterbodyIds.join(',')}`);
+            const waterbodyNames = await namesResponse.json();
+            
+            // Add WA polygons as Catchment features
+            waterbodyFeatures = data.features.map(feature => ({
+              type: 'Feature',
+              geometry: feature.geometry,
+              properties: {
+                ...feature.properties,
+                'geometry-type': 'http://environment.data.gov.uk/catchment-planning/def/geometry/Catchment',
+                ea_wb_id: feature.properties.ea_wb_id,
+                name: waterbodyNames[feature.properties.ea_wb_id] || 'Unknown'
+              }
+            }));
+            
+            // Fetch RiverLine features for all IDs
             for (const id of waterbodyIds) {
               try {
                 const wbStart = performance.now();
@@ -472,8 +488,19 @@
           // Fetch waterbody features if ea_wb_id exists
           if (feature.properties.ea_wb_id) {
             try {
-              const waterbodyResponse = await fetch(`/waterbody/${feature.properties.ea_wb_id}`);
+              // Fetch waterbody name and RiverLine features
+              const [waterbodyResponse, namesResponse] = await Promise.all([
+                fetch(`/waterbody/${feature.properties.ea_wb_id}`),
+                fetch(`/waterbody-names?ids=${feature.properties.ea_wb_id}`)
+              ]);
               const waterbodyData = await waterbodyResponse.json();
+              const waterbodyNames = await namesResponse.json();
+              
+              // Add catchment name
+              const catchmentName = waterbodyNames[feature.properties.ea_wb_id];
+              if (catchmentName) {
+                popupContent += `<b>Catchment:</b> ${catchmentName}<br>`;
+              }
               
               // Extract waterbody feature names with geometry types and distances
               const postcodePoint = turf.point([parseFloat(lng), parseFloat(lat)]);

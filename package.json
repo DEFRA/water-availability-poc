@@ -13,6 +13,7 @@
     "@turf/boolean-intersects": "^7.3.2",
     "@turf/boolean-point-in-polygon": "^7.3.2",
     "@turf/buffer": "^7.3.2",
+    "pg": "^8.18.0",
     "proj4": "^2.20.2"
   },
   "devDependencies": {

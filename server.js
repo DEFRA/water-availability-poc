@@ -1,21 +1,32 @@
 import Hapi from '@hapi/hapi'
 import Inert from '@hapi/inert'
 import H2o2 from '@hapi/h2o2'
+import pg from 'pg'
 import { readFileSync, writeFileSync, existsSync, statSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+
+const { Pool } = pg
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const hofValues = JSON.parse(readFileSync(join(__dirname, 'hof_values.json'), 'utf8'))
 const apWaterbodyMapping = JSON.parse(readFileSync(join(__dirname, 'ap_waterbody_mapping.json'), 'utf8'))
 
+// Database connection pool
+const pool = new Pool({
+  host: 'localhost',
+  port: 5432,
+  database: 'water_availability',
+  user: 'postgres',
+  password: 'postgres'
+})
+
 // Load and enrich CAMS Assessment Points at startup
 let enrichedCamsAps = null
 
 // Cache for nearby catchments WFS queries (bbox -> response)
 const nearbyCatchmentsCache = new Map()
-const waterbodyCache = new Map()
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
 async function loadCamsAps () {
@@ -101,7 +112,6 @@ const BGS_WMS_URL = 'https://map.bgs.ac.uk/arcgis/services/GeoIndex_Onshore/hydr
 const EA_WMS_URL = 'https://environment.data.gov.uk/spatialdata/water-resource-availability-and-abstraction-reliability-cycle-2/wms'
 const EA_WFS_URL = 'https://environment.data.gov.uk/spatialdata/water-resource-availability-and-abstraction-reliability-cycle-2/wfs'
 const POSTCODES_API_URL = 'https://api.postcodes.io/postcodes'
-const CATCHMENT_API_URL = 'https://environment.data.gov.uk/catchment-planning/WaterBody'
 const CAMS_AP_URL = 'https://environment.data.gov.uk/geoservices/datasets/394cde56-5cf9-42bf-8d20-86c182f9ce68/ogc/features/v1/collections/ea_catchment_abstraction_management_strategy_assessment_points/items'
 const RIVER_CATCHMENT_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/WFD_Cycle_2_River_catchment_classification/FeatureServer/5/query'
 const ABSTRACTION_LICENCES_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/Help_for_licence_trading_Abstraction_licence_points/FeatureServer/0/query'
@@ -256,7 +266,9 @@ server.route({
     })
 
     try {
-      const response = await fetch(`${EA_WFS_URL}?${query.toString()}`)
+      const url = `${EA_WFS_URL}?${query.toString()}`
+      console.log(`[DEBUG] Fetching: ${url}`)
+      const response = await fetch(url)
       const data = await response.json()
 
       // Cache the response
@@ -278,42 +290,70 @@ server.route({
     const start = Date.now()
     const { id } = request.params
 
-    // Check cache
-    const cached = waterbodyCache.get(id)
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
-      console.log(`[TIMING] waterbody/${id} (cached): ${Date.now() - start}ms`)
-      return cached.data
-    }
+    try {
+      // Only fetch RiverLine features - Catchment polygons come from WA polygons
+      const result = await pool.query(
+        `SELECT 
+           waterbody_id,
+           name,
+           geometry_type,
+           water_body_type,
+           ST_AsGeoJSON(geom)::json as geometry,
+           properties
+         FROM waterbody_features 
+         WHERE waterbody_id = $1 
+         AND geometry_type = 'http://environment.data.gov.uk/catchment-planning/def/geometry/RiverLine'`,
+        [id]
+      )
 
-    console.log(`[TIMING] waterbody/${id} handler started: 0ms`)
+      console.log(`[TIMING] waterbody/${id} (postgres): ${Date.now() - start}ms, rows: ${result.rows.length}`)
+
+      const features = result.rows.map(row => ({
+        type: 'Feature',
+        geometry: row.geometry,
+        properties: {
+          ...row.properties,
+          id: row.waterbody_id,
+          name: row.name,
+          'geometry-type': row.geometry_type,
+          'water-body-type': row.water_body_type
+        }
+      }))
+
+      return { type: 'FeatureCollection', features }
+    } catch (error) {
+      console.error(`[ERROR] waterbody/${id}:`, error.message)
+      return h.response({ type: 'FeatureCollection', features: [] }).code(200)
+    }
+  }
+})
+
+// Get waterbody names by IDs
+server.route({
+  method: 'GET',
+  path: '/waterbody-names',
+  handler: async (request, h) => {
+    const { ids } = request.query
+    if (!ids) return {}
+
+    const idArray = ids.split(',').filter(id => id)
+    if (idArray.length === 0) return {}
 
     try {
-      console.log(`[TIMING] waterbody/${id} about to fetch: ${Date.now() - start}ms`)
-      const response = await fetch(`${CATCHMENT_API_URL}/${id}.geojson`)
-      console.log(`[TIMING] waterbody/${id} fetch complete: ${Date.now() - start}ms, status: ${response.status}`)
+      const result = await pool.query(
+        'SELECT DISTINCT waterbody_id, name FROM waterbody_features WHERE waterbody_id = ANY($1)',
+        [idArray]
+      )
 
-      if (!response.ok) {
-        console.error(`Waterbody API returned ${response.status} for ${id}`)
-        return h.response({ error: 'Waterbody not found', features: [] }).code(404)
-      }
+      const names = {}
+      result.rows.forEach(row => {
+        names[row.waterbody_id] = row.name
+      })
 
-      console.log(`[TIMING] waterbody/${id} about to parse JSON: ${Date.now() - start}ms`)
-      const data = await response.json()
-      console.log(`[TIMING] waterbody/${id} JSON parsed: ${Date.now() - start}ms, features: ${data.features?.length}`)
-
-      if (!data.features) {
-        console.error(`Waterbody ${id} returned invalid data:`, data)
-        return h.response({ type: 'FeatureCollection', features: [] }).code(200)
-      }
-
-      // Cache the response
-      waterbodyCache.set(id, { data, timestamp: Date.now() })
-
-      console.log(`[TIMING] waterbody/${id} returning response: ${Date.now() - start}ms`)
-      return data
+      return names
     } catch (error) {
-      console.error(`[TIMING] waterbody/${id} error at ${Date.now() - start}ms:`, error.message)
-      return h.response({ type: 'FeatureCollection', features: [] }).code(200)
+      console.error('[ERROR] waterbody-names:', error.message)
+      return {}
     }
   }
 })
@@ -499,6 +539,15 @@ server.route({
 
 // Load CAMS APs before starting server
 await loadCamsAps()
+
+// Test database connection
+try {
+  const result = await pool.query('SELECT PostGIS_Version()')
+  console.log('Database connected. PostGIS version:', result.rows[0].postgis_version)
+} catch (error) {
+  console.error('Database connection failed:', error.message)
+  process.exit(1)
+}
 
 await server.start()
 console.log('Server running on %s', server.info.uri)
