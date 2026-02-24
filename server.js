@@ -25,10 +25,6 @@ const pool = new Pool({
 // Load and enrich CAMS Assessment Points at startup
 let enrichedCamsAps = null
 
-// Cache for nearby catchments WFS queries (bbox -> response)
-const nearbyCatchmentsCache = new Map()
-const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
-
 async function loadCamsAps () {
   const cacheFile = join(__dirname, 'cams_aps_cache.json')
   const isDev = process.env.NODE_ENV !== 'production'
@@ -110,7 +106,6 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 // Service URLs
 const BGS_WMS_URL = 'https://map.bgs.ac.uk/arcgis/services/GeoIndex_Onshore/hydrogeology/MapServer/WmsServer'
 const EA_WMS_URL = 'https://environment.data.gov.uk/spatialdata/water-resource-availability-and-abstraction-reliability-cycle-2/wms'
-const EA_WFS_URL = 'https://environment.data.gov.uk/spatialdata/water-resource-availability-and-abstraction-reliability-cycle-2/wfs'
 const POSTCODES_API_URL = 'https://api.postcodes.io/postcodes'
 const CAMS_AP_URL = 'https://environment.data.gov.uk/geoservices/datasets/394cde56-5cf9-42bf-8d20-86c182f9ce68/ogc/features/v1/collections/ea_catchment_abstraction_management_strategy_assessment_points/items'
 const ABSTRACTION_LICENCES_URL = 'https://services1.arcgis.com/JZM7qJpmv7vJ0Hzx/ArcGIS/rest/services/Help_for_licence_trading_Abstraction_licence_points/FeatureServer/0/query'
@@ -190,11 +185,39 @@ server.route({
 
 server.route({
   method: 'GET',
-  path: '/water-availability-wfs',
-  handler: {
-    proxy: {
-      uri: `${EA_WFS_URL}{query}`,
-      passThrough: true
+  path: '/water-availability-polygons',
+  handler: async (request, h) => {
+    const { bbox } = request.query
+    if (!bbox) {
+      return h.response({ error: 'bbox parameter required' }).code(400)
+    }
+
+    try {
+      const [minLng, minLat, maxLng, maxLat] = bbox.split(',').map(parseFloat)
+
+      const result = await pool.query(
+        `SELECT 
+           ea_wb_id,
+           camscdsq95,
+           ST_AsGeoJSON(geom)::json as geometry
+         FROM water_availability_polygons
+         WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)`,
+        [minLng, minLat, maxLng, maxLat]
+      )
+
+      const features = result.rows.map(row => ({
+        type: 'Feature',
+        geometry: row.geometry,
+        properties: {
+          ea_wb_id: row.ea_wb_id,
+          camscdsq95: row.camscdsq95
+        }
+      }))
+
+      return { type: 'FeatureCollection', features }
+    } catch (error) {
+      console.error('[ERROR] water-availability-polygons:', error)
+      return h.response({ error: 'Failed to fetch polygons' }).code(500)
     }
   }
 })
@@ -237,44 +260,54 @@ server.route({
     const start = Date.now()
     const { lat, lng, radius = 1000 } = request.query
 
-    // Create cache key from rounded coordinates (to ~100m precision)
-    const cacheKey = `${parseFloat(lat).toFixed(3)},${parseFloat(lng).toFixed(3)},${radius}`
-
-    // Check cache
-    const cached = nearbyCatchmentsCache.get(cacheKey)
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
-      console.log(`[TIMING] nearby-catchments (cached): ${Date.now() - start}ms`)
-      return cached.data
-    }
-
-    // Calculate bbox
-    const radiusInDegrees = parseFloat(radius) / 111000
-    const minLng = parseFloat(lng) - radiusInDegrees
-    const minLat = parseFloat(lat) - radiusInDegrees
-    const maxLng = parseFloat(lng) + radiusInDegrees
-    const maxLat = parseFloat(lat) + radiusInDegrees
-
-    const query = new URLSearchParams({
-      SERVICE: 'WFS',
-      VERSION: '2.0.0',
-      REQUEST: 'GetFeature',
-      TYPENAME: 'Resource_Availability_at_Q95',
-      OUTPUTFORMAT: 'application/json',
-      SRSNAME: 'EPSG:4326',
-      BBOX: `${minLng},${minLat},${maxLng},${maxLat},EPSG:4326`
-    })
-
     try {
-      const url = `${EA_WFS_URL}?${query.toString()}`
-      console.log(`[DEBUG] Fetching: ${url}`)
-      const response = await fetch(url)
-      const data = await response.json()
+      // Convert radius to degrees (approximate)
+      const radiusInDegrees = parseFloat(radius) / 111000
+      const point = `POINT(${parseFloat(lng)} ${parseFloat(lat)})`
 
-      // Cache the response
-      nearbyCatchmentsCache.set(cacheKey, { data, timestamp: Date.now() })
+      // Query Postgres for polygons within radius
+      const result = await pool.query(
+        `SELECT 
+           ea_wb_id,
+           camscdsq95,
+           camscdsq30,
+           camscdsq50,
+           camscdsq70,
+           country,
+           resavail,
+           shape_area,
+           shape_leng,
+           ST_AsGeoJSON(geom)::json as geometry,
+           properties
+         FROM water_availability_polygons
+         WHERE ST_DWithin(
+           geom,
+           ST_SetSRID(ST_GeomFromText($1), 4326),
+           $2
+         )`,
+        [point, radiusInDegrees]
+      )
 
-      console.log(`[TIMING] nearby-catchments (fetched): ${Date.now() - start}ms`)
-      return data
+      console.log(`[TIMING] nearby-catchments (postgres): ${Date.now() - start}ms, rows: ${result.rows.length}`)
+
+      // Transform to GeoJSON FeatureCollection
+      const features = result.rows.map(row => ({
+        type: 'Feature',
+        geometry: row.geometry,
+        properties: {
+          ea_wb_id: row.ea_wb_id,
+          camscdsq95: row.camscdsq95,
+          camscdsq30: row.camscdsq30,
+          camscdsq50: row.camscdsq50,
+          camscdsq70: row.camscdsq70,
+          country: row.country,
+          resavail: row.resavail,
+          shape_area: row.shape_area,
+          shape_leng: row.shape_leng
+        }
+      }))
+
+      return { type: 'FeatureCollection', features }
     } catch (error) {
       console.error('[ERROR] nearby-catchments:', error)
       return h.response({ error: 'Failed to fetch catchments' }).code(500)

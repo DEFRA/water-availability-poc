@@ -438,7 +438,8 @@
       
       try {
         const bounds = map.getBounds();
-        const response = await fetch(`/water-availability-wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAME=Resource_Availability_at_Q95&OUTPUTFORMAT=application/json&SRSNAME=EPSG:4326&BBOX=${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()},EPSG:4326`);
+        const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+        const response = await fetch(`/water-availability-polygons?bbox=${bbox}`);
         const data = await response.json();
         
         if (boundaryLayer) map.removeLayer(boundaryLayer);
