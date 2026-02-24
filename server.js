@@ -1,7 +1,7 @@
 import Hapi from '@hapi/hapi'
 import Inert from '@hapi/inert'
 import H2o2 from '@hapi/h2o2'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, statSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
@@ -14,7 +14,22 @@ const apWaterbodyMapping = JSON.parse(readFileSync(join(__dirname, 'ap_waterbody
 let enrichedCamsAps = null
 
 async function loadCamsAps () {
-  console.log('Loading CAMS Assessment Points...')
+  const cacheFile = join(__dirname, 'cams_aps_cache.json')
+  const isDev = process.env.NODE_ENV !== 'production'
+
+  // Check cache in dev mode (24 hour expiry)
+  if (isDev && existsSync(cacheFile)) {
+    const stats = statSync(cacheFile)
+    const ageHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60)
+    if (ageHours < 24) {
+      console.log('Loading CAMS Assessment Points from cache...')
+      enrichedCamsAps = JSON.parse(readFileSync(cacheFile, 'utf8'))
+      console.log(`Loaded ${enrichedCamsAps.features.length} CAMS Assessment Points from cache`)
+      return
+    }
+  }
+
+  console.log('Loading CAMS Assessment Points from API...')
   const allFeatures = []
   const limit = 100
   let startIndex = 0
@@ -67,6 +82,12 @@ async function loadCamsAps () {
 
   enrichedCamsAps = { type: 'FeatureCollection', features: allFeatures }
   console.log(`Loaded ${allFeatures.length} CAMS Assessment Points`)
+
+  // Save cache in dev mode
+  if (isDev) {
+    writeFileSync(cacheFile, JSON.stringify(enrichedCamsAps, null, 2))
+    console.log('Saved CAMS Assessment Points to cache')
+  }
 }
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'

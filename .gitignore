@@ -11,3 +11,6 @@ __pycache__/
 
 # Large binary files (RAM ledgers)
 *.xlsm
+
+# Cache files
+cams_aps_cache.json

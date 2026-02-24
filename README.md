@@ -113,6 +113,13 @@ A web application that displays water availability data and related hydrological
 - Automatically sets up port forwarding and opens the application
 - Includes devcontainer configuration for consistent development environment
 
+### CAMS Assessment Points Caching
+- In development mode (NODE_ENV !== 'production'), CAMS APs are cached to `cams_aps_cache.json`
+- Cache expires after 24 hours
+- Significantly speeds up server startup (avoids fetching 1097 APs from API)
+- Cache file is gitignored and works in both local dev and Codespaces
+- To regenerate AP waterbody mapping: `python3 generate_ap_waterbody_mapping.py`
+
 ### Code Standards
 - Backend follows neostandard coding standards
 - Service URLs centralized as constants for maintainability
