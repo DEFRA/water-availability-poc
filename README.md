@@ -17,26 +17,31 @@ A web application that displays water availability data and related hydrological
 ## Architecture
 
 ### Database
-- **PostgreSQL with PostGIS**: Local database for waterbody features
+- **PostgreSQL with PostGIS**: Local database for all spatial data
 - **Docker Compose**: Easy setup with `docker-compose up -d`
-- **Data**: 8,701 waterbody features (3,928 RiverLine + 1,001 Catchment polygons)
+- **Data**: 
+  - 8,701 waterbody features (3,928 RiverLine + 1,001 Catchment polygons)
+  - 4,436 water availability polygons
 - **Performance**: 2-55ms queries vs 600ms-56s EA API calls
 
 ### Data Strategy
-- **Catchment Polygons**: Use Water Availability (WA) polygons from WFS (already fetched for display)
+- **Water Availability Polygons**: Stored in Postgres, queried with PostGIS spatial functions
+- **Catchment Boundaries**: Use WA polygons (same geometry)
 - **RiverLine Features**: Fetch from local Postgres database
 - **Waterbody Names**: Fetch from local Postgres database
-- **Result**: Eliminated slow EA Catchment Planning API calls entirely
+- **Result**: Eliminated all slow/unreliable EA API dependencies
 
 ## Data Sources
 
-### Water Availability Data
-- **Display**: WMS tiles from Environment Agency service
+### Water Availability Data (Local Database)
+- **Source**: EA WFS service (loaded once, transformed from EPSG:27700 to EPSG:4326)
+- **Storage**: PostgreSQL with PostGIS
+- **Content**: 4,436 water availability polygons with classification data
+- **Query Time**: 10-50ms (vs 500ms-5.5s from WFS)
+- **Display**: WMS tiles from Environment Agency service (visual only)
 - **Interaction**: WMS GetFeatureInfo for polygon clicks
-- **Spatial Queries**: WFS for finding polygons within radius
-- **Service**: `https://environment.data.gov.uk/spatialdata/water-resource-availability-and-abstraction-reliability-cycle-2/`
 - **Properties**: Includes `camscdsq95` (color classification) and `ea_wb_id` (waterbody identifier)
-- **Usage**: WA polygons serve as catchment boundaries (no separate waterbody API call needed)
+- **Usage**: WA polygons serve as catchment boundaries
 
 ### Waterbody Features (Local Database)
 - **Source**: England.geojson from EA Catchment Planning API (loaded once)
@@ -91,14 +96,16 @@ A web application that displays water availability data and related hydrological
 ## Service Integration
 
 - **WMS (Web Map Service)**: Fast tile rendering and GetFeatureInfo queries
-- **WFS (Web Feature Service)**: Spatial queries for polygons within radius
 - **ArcGIS REST**: Monitoring sites and abstraction licence data
+- **PostGIS**: Spatial queries for all local data
 - **OGC Standards**: Proper coordinate system handling across all services
 
 ## Usage
 
 1. Start the database: `docker-compose up -d`
-2. Load waterbody data: `node load_waterbodies.js` (one-time setup)
+2. Load data (one-time setup):
+   - `node load_waterbodies.js` - Load 8,701 waterbody features
+   - `node load_wa_polygons.js` - Load 4,436 water availability polygons
 3. Start the server: `npm start`
 4. Navigate to `http://localhost:3000`
 5. Enter a UK postcode
@@ -114,13 +121,13 @@ A web application that displays water availability data and related hydrological
 - `GET /map` - Interactive map view
 - `GET /results` - Catchment results list view
 - `GET /water-availability-info` - WMS GetFeatureInfo for polygon clicks (proxied with mapUri)
-- `GET /nearby-catchments` - WFS spatial query for polygons within radius
+- `GET /nearby-catchments` - Spatial query for WA polygons within radius (from Postgres)
+- `GET /water-availability-polygons` - WA polygons in viewport bbox (from Postgres)
 - `GET /monitoring-sites` - Monitoring sites GeoJSON data
 - `GET /abstraction-licences` - Abstraction licence points GeoJSON data with pagination
 - `GET /waterbody/{id}` - RiverLine features for specific waterbody ID (from Postgres)
 - `GET /waterbody-names` - Waterbody names by IDs (from Postgres)
 - `GET /water-availability-wms` - Proxy for EA water availability WMS service
-- `GET /water-availability-wfs` - Proxy for EA water availability WFS service
 - `GET /hydrology-wms` - Proxy for BGS geological WMS service
 
 ## Development
@@ -146,17 +153,12 @@ A web application that displays water availability data and related hydrological
 
 ## CORS and Proxy Routes
 
-The application uses server-side proxy routes to avoid Cross-Origin Resource Sharing (CORS) issues when accessing external services. 
+The application uses server-side proxy routes for some external services to avoid CORS issues.
 
-**The Problem**: Web browsers block direct requests from the frontend (running on `localhost:3000` or codespace URL) to external domains like `environment.data.gov.uk`, `services1.arcgis.com`, and `map.bgs.ac.uk`.
-
-**The Solution**: All external service calls are proxied through the Node.js server:
-- Frontend calls local routes like `/nearby-catchments`, `/water-availability-info`
-- Server transforms parameters and proxies requests to external OGC/ArcGIS services
-- External services respond to server (no CORS restrictions on server-to-server calls)
-- Server returns data to frontend
-
-**Benefits**: Avoids CORS issues, enables parameter transformation, provides centralized error handling, and hides external service URLs from the frontend.
+**Current Architecture**:
+- Most data served from local Postgres database (no CORS issues)
+- WMS tile layers and GetFeatureInfo proxied through server
+- Monitoring sites and abstraction licences fetched from ArcGIS REST APIs
 
 ---
 
@@ -170,6 +172,10 @@ The application includes timing instrumentation to monitor performance bottlenec
 - nearby-catchments (WFS, cached): 500ms-5.5s (first hit), instant (cached)
 - waterbody-names (Postgres): 5-20ms
 - waterbody RiverLine features (Postgres): 2-55ms per waterbody
+**Typical load time: <1 second**
+- nearby-catchments (Postgres): 10-50ms
+- waterbody-names (Postgres): 5-20ms
+- waterbody RiverLine features (Postgres): 2-55ms per waterbody
 - abstraction licences (parallel, after render): 300ms each
 
 ### Performance Improvements
@@ -177,19 +183,15 @@ The application includes timing instrumentation to monitor performance bottlenec
 **Before migration:**
 - Total load time: 2-60+ seconds (highly variable)
 - EA Catchment Planning API: 600ms-56s per waterbody (unreliable)
+- EA WFS Service: 500ms-5.5s (variable)
 - Frequent 503 errors and timeouts
 
 **After migration:**
 - Total load time: <1 second (consistent)
 - Postgres queries: 2-55ms (reliable)
-- Eliminated slow EA Catchment Planning API entirely
+- Eliminated all slow/unreliable EA API dependencies
 
 ### Remaining External Dependencies
-
-**Environment Agency WFS Service** (`/spatialdata/.../wfs`):
-- Response times range from 500ms to 5.5s
-- Cached for 1 hour to improve performance
-- Used for water availability polygon queries
 
 **ArcGIS Services** (abstraction licences) are consistently fast:
 - Response times: 200-450ms
