@@ -13,6 +13,11 @@ const apWaterbodyMapping = JSON.parse(readFileSync(join(__dirname, 'ap_waterbody
 // Load and enrich CAMS Assessment Points at startup
 let enrichedCamsAps = null
 
+// Cache for nearby catchments WFS queries (bbox -> response)
+const nearbyCatchmentsCache = new Map()
+const waterbodyCache = new Map()
+const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+
 async function loadCamsAps () {
   const cacheFile = join(__dirname, 'cams_aps_cache.json')
   const isDev = process.env.NODE_ENV !== 'production'
@@ -219,33 +224,49 @@ server.route({
 server.route({
   method: 'GET',
   path: '/nearby-catchments',
-  handler: {
-    proxy: {
-      mapUri: (request) => {
-        const start = Date.now()
-        const { lat, lng, radius = 1000 } = request.query
+  handler: async (request, h) => {
+    const start = Date.now()
+    const { lat, lng, radius = 1000 } = request.query
 
-        // Calculate precise bbox for radius (1 degree ≈ 111km at equator)
-        const radiusInDegrees = parseFloat(radius) / 111000
-        const minLng = parseFloat(lng) - radiusInDegrees
-        const minLat = parseFloat(lat) - radiusInDegrees
-        const maxLng = parseFloat(lng) + radiusInDegrees
-        const maxLat = parseFloat(lat) + radiusInDegrees
+    // Create cache key from rounded coordinates (to ~100m precision)
+    const cacheKey = `${parseFloat(lat).toFixed(3)},${parseFloat(lng).toFixed(3)},${radius}`
 
-        const query = new URLSearchParams({
-          SERVICE: 'WFS',
-          VERSION: '2.0.0',
-          REQUEST: 'GetFeature',
-          TYPENAME: 'Resource_Availability_at_Q95',
-          OUTPUTFORMAT: 'application/json',
-          SRSNAME: 'EPSG:4326',
-          BBOX: `${minLng},${minLat},${maxLng},${maxLat},EPSG:4326`
-        })
+    // Check cache
+    const cached = nearbyCatchmentsCache.get(cacheKey)
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+      console.log(`[TIMING] nearby-catchments (cached): ${Date.now() - start}ms`)
+      return cached.data
+    }
 
-        console.log(`[TIMING] nearby-catchments: ${Date.now() - start}ms`)
-        return { uri: `${EA_WFS_URL}?${query.toString()}` }
-      },
-      passThrough: true
+    // Calculate bbox
+    const radiusInDegrees = parseFloat(radius) / 111000
+    const minLng = parseFloat(lng) - radiusInDegrees
+    const minLat = parseFloat(lat) - radiusInDegrees
+    const maxLng = parseFloat(lng) + radiusInDegrees
+    const maxLat = parseFloat(lat) + radiusInDegrees
+
+    const query = new URLSearchParams({
+      SERVICE: 'WFS',
+      VERSION: '2.0.0',
+      REQUEST: 'GetFeature',
+      TYPENAME: 'Resource_Availability_at_Q95',
+      OUTPUTFORMAT: 'application/json',
+      SRSNAME: 'EPSG:4326',
+      BBOX: `${minLng},${minLat},${maxLng},${maxLat},EPSG:4326`
+    })
+
+    try {
+      const response = await fetch(`${EA_WFS_URL}?${query.toString()}`)
+      const data = await response.json()
+
+      // Cache the response
+      nearbyCatchmentsCache.set(cacheKey, { data, timestamp: Date.now() })
+
+      console.log(`[TIMING] nearby-catchments (fetched): ${Date.now() - start}ms`)
+      return data
+    } catch (error) {
+      console.error('[ERROR] nearby-catchments:', error)
+      return h.response({ error: 'Failed to fetch catchments' }).code(500)
     }
   }
 })
@@ -256,6 +277,14 @@ server.route({
   handler: async (request, h) => {
     const start = Date.now()
     const { id } = request.params
+
+    // Check cache
+    const cached = waterbodyCache.get(id)
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+      console.log(`[TIMING] waterbody/${id} (cached): ${Date.now() - start}ms`)
+      return cached.data
+    }
+
     console.log(`[TIMING] waterbody/${id} handler started: 0ms`)
 
     try {
@@ -276,6 +305,9 @@ server.route({
         console.error(`Waterbody ${id} returned invalid data:`, data)
         return h.response({ type: 'FeatureCollection', features: [] }).code(200)
       }
+
+      // Cache the response
+      waterbodyCache.set(id, { data, timestamp: Date.now() })
 
       console.log(`[TIMING] waterbody/${id} returning response: ${Date.now() - start}ms`)
       return data

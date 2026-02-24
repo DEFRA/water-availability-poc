@@ -74,6 +74,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
   <script>
+    const pageLoadStart = performance.now();
     const urlParams = new URLSearchParams(window.location.search)
     const lat = urlParams.get('lat')
     const lng = urlParams.get('lng')
@@ -109,11 +110,13 @@
       // Query layer metadata at pin location
       const queryMetadata = async () => {
         try {
-          console.log('Fetching polygons within 1km of:', lat, lng);
+          const wbLoadStart = performance.now();
+          console.log('[WB TIMING] Fetching polygons within 1km of:', lat, lng);
           
           // Get all polygons within 1km using WFS
           const response = await fetch(`/nearby-catchments?lat=${lat}&lng=${lng}&radius=1000`);
           const data = await response.json();
+          console.log('[WB TIMING] Polygons fetched:', (performance.now() - wbLoadStart).toFixed(0), 'ms');
           
           let popupContent = `<b>Postcode:</b> ${postcode || 'Unknown'}<br>`;
           
@@ -127,17 +130,21 @@
                 .filter(id => id)
             )];
             
+            console.log('[WB TIMING] Fetching', waterbodyIds.length, 'waterbodies');
             // Fetch waterbody features for all IDs
             waterbodyFeatures = []; // Reset global array
             for (const id of waterbodyIds) {
               try {
+                const wbStart = performance.now();
                 const waterbodyResponse = await fetch(`/waterbody/${id}`);
                 const waterbodyData = await waterbodyResponse.json();
+                console.log(`[WB TIMING] Waterbody ${id}:`, (performance.now() - wbStart).toFixed(0), 'ms');
                 waterbodyFeatures.push(...waterbodyData.features);
               } catch (error) {
                 console.error(`Failed to load waterbody ${id}:`, error);
               }
             }
+            console.log('[WB TIMING] All waterbodies loaded:', (performance.now() - wbLoadStart).toFixed(0), 'ms');
             
             // Add all waterbody features to map as a single layer
             if (waterbodyFeatures.length > 0) {
@@ -944,6 +951,8 @@
         flowChartModal.style.display = 'none';
       }
     };
+    
+    console.log('[MAP TIMING] Page fully loaded:', (performance.now() - pageLoadStart).toFixed(0), 'ms');
   </script>
 </body>
 </html>
