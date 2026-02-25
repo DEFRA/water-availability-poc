@@ -69,7 +69,7 @@
       try {
         // Get polygons within 1km
         const step1Start = performance.now();
-        const response = await fetch(`/nearby-catchments?lat=${lat}&lng=${lng}&radius=1000`);
+        const response = await fetch(`/nearby-catchments?lat=${lat}&lng=${lng}&radius=5000`);
         console.log(`[CLIENT TIMING] nearby-catchments fetch: ${(performance.now() - step1Start).toFixed(0)}ms`);
         
         if (!response.ok) {

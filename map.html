@@ -109,7 +109,7 @@
           console.log('[WB TIMING] Fetching polygons within 1km of:', lat, lng);
           
           // Get all polygons within 1km using WFS
-          const response = await fetch(`/nearby-catchments?lat=${lat}&lng=${lng}&radius=1000`);
+          const response = await fetch(`/nearby-catchments?lat=${lat}&lng=${lng}&radius=5000`);
           const data = await response.json();
           console.log('[WB TIMING] Polygons fetched:', (performance.now() - wbLoadStart).toFixed(0), 'ms');
           
