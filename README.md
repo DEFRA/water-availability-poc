@@ -1,6 +1,14 @@
 # Water Availability Mapping Proof of Concept
 
-A web application that displays water availability data and related hydrological information for UK locations based on postcode input.
+A web application that displays water availability data and related hydrological information for UK locations based on postcode input. This is a Proof of Concept exploring what we might build in beta to satisfy identified user needs. We are preparing for GDS alpha assessment.
+
+## User Needs
+
+The design prototype has been iterated with users and the needs have focused on three core questions:
+
+1. **Are licences available?** — At a given location, is water available for abstraction and what is the current resource availability classification?
+2. **What HOF restrictions would apply?** — If a licence were granted, what Hands Off Flow conditions would be attached, and at what flow threshold would abstraction have to cease?
+3. **Does availability match my seasonal need?** — Given the HOF restriction, when would water abstraction have been restricted historically, by month, over a number of years? In other words, does the practical water availability under the licence match the applicant's seasonal pattern of need?
 
 ## Features
 
