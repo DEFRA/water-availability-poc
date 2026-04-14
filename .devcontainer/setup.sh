@@ -4,8 +4,14 @@ set -e
 echo "Installing dependencies..."
 npm install
 
+echo "Installing postgresql-client..."
+sudo apt-get update && sudo apt-get install -y postgresql-client
+
+echo "Starting PostGIS..."
+docker compose up -d
+
 echo "Waiting for PostGIS to be ready..."
-until PGPASSWORD=postgres pg_isready -h "${DB_HOST:-localhost}" -U postgres -d water_availability 2>/dev/null; do
+until pg_isready -h localhost -U postgres -d water_availability 2>/dev/null; do
   echo "  PostGIS not ready, retrying..."
   sleep 2
 done
