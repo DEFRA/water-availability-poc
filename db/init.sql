@@ -6,7 +6,7 @@ CREATE TABLE waterbody_features (
   id SERIAL PRIMARY KEY,
   waterbody_id VARCHAR(50) UNIQUE NOT NULL,
   name VARCHAR(255),
-  geometry_type VARCHAR(50),
+  geometry_type VARCHAR(100),
   water_body_type VARCHAR(50),
   geom GEOMETRY(Geometry, 4326),
   properties JSONB,
