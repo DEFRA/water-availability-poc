@@ -7,7 +7,8 @@ npm install
 echo "Installing postgresql-client..."
 sudo apt-get update && sudo apt-get install -y postgresql-client > /dev/null 2>&1
 
-echo "Starting PostGIS..."
+echo "Starting PostGIS (fresh)..."
+docker compose down -v
 docker compose up -d
 
 echo "Waiting for PostGIS to be ready..."
