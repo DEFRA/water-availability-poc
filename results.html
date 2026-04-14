@@ -310,7 +310,10 @@
                 keyboard: false
               });
               
-              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(thumbnailMap);
+              L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                subdomains: 'abcd',
+                maxZoom: 20
+              }).addTo(thumbnailMap);
               
               const geoJsonLayer = L.geoJSON(f.geometry, {
                 style: { color: '#007cba', weight: 2, fillOpacity: 0.3 }
