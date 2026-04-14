@@ -17,6 +17,10 @@ until pg_isready -h localhost -U postgres -d water_availability 2>/dev/null; do
   sleep 2
 done
 
+echo "Ensuring schema is up to date..."
+PGPASSWORD=postgres psql -h localhost -U postgres -d water_availability \
+  -c "ALTER TABLE waterbody_features ALTER COLUMN geometry_type TYPE VARCHAR(100);" 2>/dev/null || true
+
 echo "Downloading England.geojson..."
 curl -L --retry 3 --retry-delay 5 -o england_waterbodies.geojson \
   "https://environment.data.gov.uk/catchment-planning/England.geojson"
