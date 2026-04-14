@@ -10,7 +10,7 @@ if [ ! -z "$EXISTING" ]; then
 fi
 
 echo "Creating fresh codespace..."
-gh codespace create --repo neilbmclaughlin/wa-location
+gh codespace create --repo DEFRA/water-availability-poc
 
 echo "Getting codespace name..."
 CODESPACE_NAME=$(gh codespace list --json name --jq '.[0].name')
