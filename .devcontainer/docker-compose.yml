@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   app:
-    image: mcr.microsoft.com/devcontainers/javascript-node:22
+    build:
+      context: .
+      dockerfile: Dockerfile
     volumes:
       - ..:/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-water-availability-poc}:cached
     command: sleep infinity
