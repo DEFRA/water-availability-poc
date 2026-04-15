@@ -2,6 +2,8 @@
 
 Water Availability Mapping Service
 
+*Abbreviations used throughout this document are defined in the [Glossary](#glossary) at the end.*
+
 ---
 
 ## Supporting Evidence (Alpha)
@@ -18,7 +20,7 @@ Service Standard point 9.
 
 ### What security threats does the service perceive and what mitigations?
 
-The service is an information-only service with no user accounts or personal data collection. The primary threats are:
+The service is an information-only service with no user accounts or personal data collection. The data served is limited to publicly available water resource availability classifications and environmental flow information — it does not include commercially sensitive abstraction licence details, individual abstraction volumes, or licence holder information. The primary threats are:
 
 - **Denial of service** — Mitigated by CDP's platform-level protections (WAF, rate limiting)
 - **Abuse of proxy routes** — The service proxies requests to EA and BGS WMS/WFS services. Mitigated by validating and constraining query parameters server-side
@@ -119,6 +121,8 @@ The PoC is not representative of the proposed beta architecture but validated th
 Primary users are **prospective water abstraction licence applicants** — farmers, landowners, water companies, and their agents — who need to understand whether water is available at a specific location before investing time and money in a licence application.
 
 Secondary users may include EA licensing officers and water resources staff who currently rely on regional spreadsheets (CAMS Ledgers) to answer the same questions.
+
+Further work may be needed to determine whether there is an identified need for API consumers, for example in the water industry. If so, this may be met by publishing data via the Defra Data Services Platform rather than building a separate API.
 
 ## Is the service transactional or non-transactional?
 
@@ -228,6 +232,7 @@ Service Standard point 14.
 
 ### How will the service ensure quality?
 
+- Development will follow the **Defra Software Development Standards**
 - neostandard coding standards enforced via ESLint
 - Definition of Done includes code review, test coverage and SonarCloud quality gate pass
 - Acceptance criteria defined per user story
@@ -235,14 +240,44 @@ Service Standard point 14.
 
 ### How does the service intend to test against GDS stipulated browsers?
 
-Cross-browser testing will be performed against the current GDS browser list. The progressive enhancement approach (core functionality in server-rendered HTML, map as JavaScript enhancement) ensures the service works across all supported browsers including those without JavaScript.
+Cross-browser testing will be performed against the current GDS browser list. The progressive enhancement approach (core functionality in server-rendered HTML, map as JavaScript enhancement) ensures the service works across all supported browsers including those without JavaScript. The beta service will use the **Defra Interactive Map component** (https://github.com/DEFRA/interactive-map) — a recently released accessible map component designed to meet Defra's accessibility and cross-browser requirements. The PoC used Leaflet.js for simplicity.
 
 ### Will you appoint a Tester?
 
-TBC — to be confirmed as part of beta team composition. During alpha, testing has been performed by the development team with user research input from the design team.
+Yes
 
 ### What environments have been decided upon and how do you intend to implement continuous integration?
 
 - Standard CDP environments: development, test, pre-production, production.
 - CI/CD via GitHub Actions with automated build, test, static analysis (SonarCloud), and deployment through CDP's managed pipeline.
 - Every merge to main triggers the pipeline; deployments to production require approval.
+
+---
+
+## Glossary
+
+| Abbreviation | Definition |
+|---|---|
+| BGS | British Geological Survey |
+| CAMS | Catchment Abstraction Management Strategy |
+| CDP | Core Delivery Platform (Defra's managed hosting platform) |
+| CI/CD | Continuous Integration / Continuous Deployment |
+| DPIA | Data Protection Impact Assessment |
+| EA | Environment Agency |
+| EFI | Environmental Flow Indicator |
+| FDC | Flow Duration Curve |
+| GDS | Government Digital Service |
+| GIS | Geographic Information System |
+| HOF | Hands Off Flow |
+| NALD | National Abstraction Licensing Database |
+| OGC | Open Geospatial Consortium |
+| OGL | Open Government Licence |
+| OS | Ordnance Survey |
+| RDS | Relational Database Service (AWS managed PostgreSQL) |
+| RPA | Rural Payments Agency |
+| TLS | Transport Layer Security |
+| WAF | Web Application Firewall |
+| WCAG | Web Content Accessibility Guidelines |
+| WFS | Web Feature Service (OGC standard) |
+| WMS | Web Map Service (OGC standard) |
+| WR GIS | Water Resources Geographic Information System |
