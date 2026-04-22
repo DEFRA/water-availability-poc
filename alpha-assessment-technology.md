@@ -151,29 +151,23 @@ CI/CD via GitHub Actions deploying through CDP's managed pipeline.
 
 ## Technical risks and mitigations
 
-### Risk 1: EA geospatial APIs too slow/unreliable for production use
+Four significant technical risks were identified during alpha and experiments conducted to mitigate them:
 
-**Experiment:** The PoC tested direct EA WFS and Catchment Planning API calls against a local PostGIS database loaded with the same data.
+1. **External API performance may not meet service SLAs.** The PoC tested EA geospatial API response times and found them highly variable (2–60 seconds with frequent 503 errors). The mitigation is to cache data in PostgreSQL/PostGIS where API SLAs are insufficient — the PoC validated this approach, reducing response times to under 1 second consistently.
 
-**Result:** PostGIS reduced response times from 2–60 seconds (highly variable, with frequent 503 errors) to under 1 second (consistent). This validated the approach of loading EA spatial data into a local database rather than depending on external APIs at request time.
+2. **WR GIS water availability data may not be publishable.** Some geospatial data in WR GIS is subject to a formal approval process before it can be made public. We discussed the publishing process with the DDTS GIS team to understand the requirements and identify any potential blockers. No issues were foreseen but the approval process will need to be followed.
 
-### Risk 2: HOF and water availability data not available in structured form outside CAMS Ledger spreadsheets
+3. **Water availability feature data does not currently include HOF levels and bands.** The published water availability data includes colour classifications but not the HOF thresholds needed to answer the user need around licensing restrictions. We discussed with the DDTS GIS team how the existing CAMS Ledger upload process to WR GIS could be modified to include HOF data alongside the existing classification data.
 
-**Experiment:** Reverse-engineered the CAMS Ledger spreadsheet (Cuckmere & Pevensey Levels) to understand the full calculation chain — 21 sheets covering FDC construction, EFI framework, licence impact accumulation, and colour classification. Investigated the NALD database for licence and HOF condition data.
+4. **It may not be possible to present users with historic water availability based on current HOF levels.** A key user need is understanding the seasonal pattern of abstraction restrictions under a HOF condition. The PoC demonstrated that, given a HOF level, it is possible to compare it against historic gauged flow data from the EA Hydrology Data Explorer API to show when abstraction would have been restricted, by month, over a number of years.
 
-**Result:** The calculation logic is fully traceable and implementable in code. NALD holds ~60–70% of the required licence data (quantities, periods, points, HOF conditions). However, critical inputs — monthly abstraction profiles, percentage of water returned, and groundwater spatial impact distributions — are expert judgement stored only in the spreadsheets. Approximations using conservative defaults are feasible for screening purposes but not for formal licensing decisions.
+## Notes on caching of API data
 
-### Risk 3: Naturalised flow data needed for HOF calculations is not readily accessible
+Our preference is to call source APIs directly and not cache data locally. We would only cache where the source API response times are not sufficient to meet our service SLAs.
 
-**Experiment:** Analysed the CAMS Ledger's Flow Data sheet to understand the source and nature of the natural flow statistics used in calculations.
+The PoC identified that some EA geospatial APIs have response times of 2–60 seconds with frequent 503 errors — not viable for a user-facing service. Where APIs are performant and reliable, the backend will call them directly with no local persistence.
 
-**Result:** Naturalised FDCs are produced by hydrological modelling (CatchMod, decomposition methods, Low Flows Enterprise) — not available from operational APIs or databases. They also drift over time as the gauged record extends. Published ledger outputs could be used as a baseline, with the understanding that values become stale between periodic CAMS reviews.
-
-### Risk 4: Water availability classifications may be stale between CAMS reviews
-
-**Experiment:** Explored whether incremental updates are possible by detecting new licences granted since the last ledger date using NALD data.
-
-**Result:** New licences can be identified and their basic parameters retrieved from NALD. Incremental impact estimates are possible with conservative defaults for the missing expert inputs. This would be sufficient for flagging APs where availability may have changed — useful for screening, not for replacing the formal CAMS review process.
+Where caching is necessary, the local database acts as a performance cache, not a copy of record. The source of truth remains the published data on the Defra Data Services Platform. The underlying data is strategic planning data that changes infrequently (aligned with CAMS review cycles), so the divergence risk is low and the refresh schedule can match the source publication cycle.
 
 ## Data publishing
 
