@@ -29,11 +29,11 @@ async function loadCamsAps () {
   const cacheFile = join(__dirname, 'cams_aps_cache.json')
   const isDev = process.env.NODE_ENV !== 'production'
 
-  // Check cache in dev mode (24 hour expiry)
+  // Check cache in dev mode (7 day expiry)
   if (isDev && existsSync(cacheFile)) {
     const stats = statSync(cacheFile)
     const ageHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60)
-    if (ageHours < 24) {
+    if (ageHours < 168) {
       console.log('Loading CAMS Assessment Points from cache...')
       enrichedCamsAps = JSON.parse(readFileSync(cacheFile, 'utf8'))
       console.log(`Loaded ${enrichedCamsAps.features.length} CAMS Assessment Points from cache`)
