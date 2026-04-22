@@ -48,7 +48,9 @@ On the frontend, we'll use the GOV.UK Design System and, if we need it, the Defr
 
 ## Slide 7: Open source code
 
-All code will be published and public on Defra's GitHub. Static analysis will run via SonarCloud on every pull request and merge. The code will be owned by Defra and published under the Open Government Licence. Development will follow the Defra Software Development Standards.
+All code will be published and public on Defra's GitHub. The code will be owned by Defra and published under the Open Government Licence.
+The service is also built entirely on open source technology — Node.js, Hapi.js, PostgreSQL, PostGIS, Docker — so there are no proprietary runtime or framework dependencies.
+Development will follow the Defra Software Development Standards.
 
 ## Slide 8: Secure service — user privacy
 
@@ -56,13 +58,13 @@ The service will collect no personal data — none will be collected, stored, or
 
 ## Slide 9: Reliable service
 
-One thing that simplifies this service significantly is that there will be no transactional data. Users won't be creating accounts or submitting forms — they'll be querying published environmental data. This means our environments will be naturally consistent, there will be no test data to manage, and disaster recovery will be straightforward — we just redeploy and the data aggregation service repopulates from the published sources.
+On quality, we'll follow the Defra Software Development Standards, with static code analysis by SonarCloud on every build, automated and manual testing, accessibility testing against WCAG standards, an IT Health Check before go-live, and performance testing.
+
+On resilience, there's no transactional data — users are querying published environmental data, not creating accounts or submitting forms. That means environments stay naturally consistent, no test data to manage, and disaster recovery is just a redeploy — the data aggregation service repopulates from the published sources.
 
 The service will also be designed to degrade gracefully. If an external API goes down — say the Hydrology Data Explorer — that part of the service will be unavailable, but the rest will continue to work. The water availability classifications will be served from cached data, so the core functionality will remain available even if a source API is temporarily down.
 
 The Proof of Concept validated the caching approach for geospatial data. We saw external API response times of 2 to 60 seconds, often with errors. Local caching brought that down to under a second, consistently. As a note, the historic hydrology data is too large to cache and will be called directly from the API.
-
-On quality, we'll follow the Defra Software Development Standards, with SonarCloud on every build, automated and manual testing, accessibility testing against WCAG standards, an IT Health Check before go-live, and performance testing.
 
 For environments and monitoring, we'll use the standard CDP pipeline — dev, test, performance test, and production — with CI/CD through GitHub Actions. Multiple instances will be split across availability zones. And we'll be using CDP's monitoring and alerting tooling.
 
