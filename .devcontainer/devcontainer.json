@@ -15,5 +15,5 @@
     }
   },
   "postCreateCommand": "bash .devcontainer/setup.sh",
-  "postStartCommand": "npm run dev"
+  "postStartCommand": "docker compose up -d && until pg_isready -h localhost -U postgres -d water_availability 2>/dev/null; do sleep 2; done && npm run dev"
 }
