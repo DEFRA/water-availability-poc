@@ -4,6 +4,11 @@
 
 Welcome back. I'm Neil McLaughlin, lead developer on the team. I joined in December, part way through alpha, brought in with a brief to keep the design grounded in technical reality — making sure what we're proposing is feasible and buildable. I'm going to walk through the technical landscape, the proposed architecture for beta, and how we're meeting the service standard on technology, open source, security, and reliability. As Keir covered the data requirements before lunch, I'll build on that context.
 
+Before I start, this being the section where we talk about tech, there are a lot
+of acronyms so I've posted a glossary of those used to the chat.
+
+The most commonly occurring is GIS (Geographic Information System) - this refers to systems used for storing and querying data linked to geographic locations — for example, finding which water availability areas are near a given postcode as well as rendering maps.
+
 ## Slide 2: Technical landscape — Spreadsheet Ledgers
 
 As Keir mentioned before lunch, water availability is recorded by area teams in spreadsheet ledgers. There are over 100 of them, held across different SharePoint sites by local teams. Although the spreadsheets are version controlled, there may be several different versions in use across areas.
