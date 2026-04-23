@@ -30,7 +30,7 @@ The key point is that the new services we'll be building — shown in pink — w
 
 ## Slide 5: Technical landscape — Services and data sources
 
-This slide summarises the services and data sources I just described. All data sources are published, standards-based services with no bespoke integrations: the Defra Data Services Platform for water availability maps, the EA Hydrology Data Explorer for historic river flow data, OS Places API for location search, and potentially an RPA API for land parcel lookup.
+This slide summarises the services and data sources I just described. All data sources are published, standards-based services with no bespoke integrations: the Defra Data Services Platform for water availability data (sourced from WR GIS — including availability classifications, assessment point locations, and HOF values/bands), the EA Hydrology Data Explorer for historic river flow data, OS Places API for location search, and potentially an RPA API for land parcel lookup.
 
 A Proof of Concept was built during alpha to explore these technology choices and mitigate technical risks before committing to the beta architecture. I'll share a link to the PoC repo and deployed version in the chat towards the end.
 
