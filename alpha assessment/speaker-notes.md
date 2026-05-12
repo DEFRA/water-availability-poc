@@ -2,10 +2,9 @@
 
 ## Slide 1: Technical proposals and rationale
 
-Welcome back. I'm Neil McLaughlin, lead developer on the team. I joined in December, part way through alpha, brought in with a brief to keep the design grounded in technical reality — making sure what we're proposing is feasible and buildable. I'm going to walk through the technical landscape, the proposed architecture for beta, and how we're meeting the service standard on technology, open source, security, and reliability. As Keir covered the data requirements before lunch, I'll build on that context.
+Welcome back. I'm Neil McLaughlin, lead developer on the team. I joined in December, part way through alpha, brought to ensure the designs grounded in technical reality — making sure what we're proposing is feasible and buildable. I'm going to walk through the technical landscape, the proposed architecture for beta, and how we're meeting the service standard on technology, open source, security, and reliability. As Keir covered the data requirements before lunch, I'll build on that context.
 
-Before I start, this being the section where we talk about tech, there are a lot
-of acronyms so I've posted a glossary of those used to the chat.
+Before I start, this being the section where we talk about tech, there are a lot of acronyms (especially around standards) so I've posted a glossary of those used to the chat.
 
 The most commonly occurring is GIS (Geographic Information System) - this refers to systems used for storing and querying data linked to geographic locations — for example, finding which water availability areas are near a given postcode as well as rendering maps.
 
@@ -47,6 +46,8 @@ For geospatial data, we'll be using open standards throughout — GeoJSON, WMS, 
 
 On the frontend, we'll use the GOV.UK Design System and, if we need it, the Defra Interactive Map component, which has recently been released for general use. Location search will use the OS Places API under Defra's existing licence. The service will be designed with progressive enhancement in mind — the core user needs will be answered in server-rendered HTML without JavaScript. The interactive map, if required, will be an enhancement for users who can use it, not a dependency.
 
+### Footnotes
+
 *If asked about cost/lock-in:* CDP abstracts infrastructure costs, all technology is open source, and there are no proprietary licence fees beyond the existing Defra OS Places licence. We can change any component without vendor lock-in.
 
 *If asked why we didn't consider other technology options:* Using Defra defaults is the considered choice. CDP, Node/Hapi, and Postgres have already been through Defra's tools radar and TDA approval — we inherit that due diligence. The service has no unusual technical requirements that would justify deviating — it's a standard web application consuming APIs and serving pages. PostGIS is the one addition beyond the default, and that was validated by the PoC. Choosing non-standard technology would increase cost, reduce the developer pool, and require additional governance — with no benefit for this service.
@@ -74,6 +75,8 @@ The Proof of Concept validated the caching approach for geospatial data. We saw 
 For environments and monitoring, we'll use the standard CDP pipeline — dev, test, performance test, and production — with CI/CD through GitHub Actions. Multiple instances will be split across availability zones. And we'll be using CDP's monitoring and alerting tooling.
 
 I'm going to hand over now to JP, who can talk through where we are with technical governance.
+
+### Footnotes
 
 *If asked about support/availability:* We're anticipating Tier 3 — standard support, business hours. The service will provide public environmental information — it's not operational or safety-critical.
 
@@ -104,3 +107,17 @@ I'm going to hand over now to JP, who can talk through where we are with technic
 | WFS | Web Feature Service (OGC standard) |
 | WMS | Web Map Service (OGC standard) |
 | WR GIS | Water Resources Geographic Information System |
+
+---
+
+## Technical Risks and Mitigations (reference)
+
+1. **External API performance may not meet service SLAs** — PoC tested EA geospatial APIs, found 2-60s response times with frequent 503 errors. Validated that PostGIS caching brings it to under 1 second.
+
+2. **WR GIS water availability data may not be publishable** — Discussed with DDTS GIS team. Formal approval process exists, no blockers foreseen.
+
+3. **Published data missing HOF levels and bands** — Working with DDTS GIS team to modify the existing CAMS Ledger upload process to include HOF data in WR GIS.
+
+4. **Gauged flow data may not be suitable for showing seasonal water availability under HOF restrictions** — Initial assumption was HOF thresholds are measured against naturalised flows (not readily available historically). Investigation confirmed HOF compliance is actually measured against gauged flow. PoC demonstrated that comparing HOF thresholds against historic gauged flow data produces a meaningful seasonal restriction profile.
+
+5. **No suitable API for geocoding land parcels** — Users may want to search by land parcel rather than postcode or grid reference. The existing RPA public APIs require an SBI number and return limited data — they're not designed for Defra services. We've reached out to colleagues working on similar needs (Farming Grants, CPH project) and been pointed to the Spatial Data Mart as the likely source. We're engaging with the Spatial Data Mart team to understand access options. This is a shared need across multiple Defra services.
